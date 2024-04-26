@@ -1,1 +1,0 @@
-../vmec/wout_cfqs_2b40_hires_aScaling.nc

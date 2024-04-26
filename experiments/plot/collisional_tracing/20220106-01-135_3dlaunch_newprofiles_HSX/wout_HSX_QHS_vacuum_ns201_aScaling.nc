@@ -1,1 +1,0 @@
-../vmec/wout_HSX_QHS_vacuum_ns201_aScaling.nc

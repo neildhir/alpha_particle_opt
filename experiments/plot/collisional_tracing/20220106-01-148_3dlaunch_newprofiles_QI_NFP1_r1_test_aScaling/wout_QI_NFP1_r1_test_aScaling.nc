@@ -1,1 +1,0 @@
-../vmec/wout_QI_NFP1_r1_test_aScaling.nc

@@ -1,1 +1,0 @@
-../vmec/wout_GarabedianQAS2_aScaling.nc

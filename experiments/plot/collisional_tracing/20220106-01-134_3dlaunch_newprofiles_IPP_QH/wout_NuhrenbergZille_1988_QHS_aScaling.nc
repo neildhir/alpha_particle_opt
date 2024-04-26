@@ -1,1 +1,0 @@
-../vmec/wout_NuhrenbergZille_1988_QHS_aScaling.nc

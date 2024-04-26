@@ -1,1 +1,0 @@
-../vmec/wout_Spong_20160107_ITER_hybridAxisymmFixedBoundary_aScaling.nc

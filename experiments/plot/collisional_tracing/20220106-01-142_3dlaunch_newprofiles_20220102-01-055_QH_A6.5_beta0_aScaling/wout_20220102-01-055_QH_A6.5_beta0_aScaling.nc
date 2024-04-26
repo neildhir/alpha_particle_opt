@@ -1,1 +1,0 @@
-../vmec/wout_20220102-01-055_QH_A6.5_beta0_aScaling.nc
