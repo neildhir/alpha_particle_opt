@@ -1,7 +1,7 @@
 import os
 import sys
 
-sys.path.insert(0, os.getcwd())
+sys.path.insert(0, os.getcwd())  # Manually add current directory (src in this case) to pythonpath
 
 from src.trace.trace_boozer import TraceBoozer
 
@@ -15,7 +15,7 @@ size = comm.Get_size()
 rank = comm.Get_rank()
 
 # choose an initial configuration
-vmec_input = "../vmec_input_files/input.nfp4_QH_warm_start_high_res"
+vmec_input = "vmec_input_files/vmec_input_files/input.nfp4_QH_warm_start_high_res"
 
 # number of Fourier modes for optimization
 max_mode = 1
@@ -61,14 +61,15 @@ tracer.sync_seeds()
 x0 = tracer.x0
 
 
-def objective(x):
+# Objective
+def f(x):
     """
     objective for minimization:
 
     expected energy retatined
       f = E[3.5*np.exp(-2*c_times/tmax)]
 
-    x: array,vmec configuration variables
+    x: array, vmec configuration variables
     """
     # sample particle positions (uniformly in theta,phi not in space)
     stz_inits, vpar_inits = tracer.sample_surface(n_particles, s_label)
@@ -82,7 +83,7 @@ def objective(x):
 
     if np.any(~np.isfinite(c_times)):
         # vmec failed here; return worst possible value
-        c_times = np.zeros(len(vpars))
+        c_times = np.zeros(len(vpars))  # TODO: Misha to fix this; vpars is undefined
 
     # energy retained by particle
     feat = 3.5 * np.exp(-2 * c_times / tmax)
