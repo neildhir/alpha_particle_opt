@@ -8,11 +8,9 @@ from botorch.fit import fit_gpytorch_model
 from gpytorch.mlls import ExactMarginalLogLikelihood
 from botorch.acquisition import ExpectedImprovement
 from botorch.optim import optimize_acqf
-from botorch.models.transforms import Normalize, Standardize
-import math
 import time
 
-from tracing_example import f  # Objective function
+from tracing_example import f, build_train_data  # Objective function
 
 
 def initialize_model(
@@ -35,15 +33,11 @@ def initialize_model(
     tuple[ExactMarginalLogLikelihood, SingleTaskGP]
         The model and the marginal log likelihood.
     """
-    bounds = torch.stack([torch.zeros(d), torch.tensor([2 * math.pi])])
-    input_transform = Normalize(d=d, bounds=bounds)
 
-    # Surrogate model (gp)
+    # Build surrogate model (gp)
     model = SingleTaskGP(
         train_X=train_X,
         train_Y=train_Y,
-        outcome_transform=Standardize(m=1),
-        input_transform=input_transform,
     )  # Uses a scaled Matern kernel by default
     mll = ExactMarginalLogLikelihood(model.likelihood, model)
     # load state dict if it is passed
@@ -52,7 +46,7 @@ def initialize_model(
     return mll, model
 
 
-def optimize_acqf_and_get_observation(acq_func: ExpectedImprovement) -> tuple[Tensor, Tensor]:
+def optimize_acqf_and_get_observation(acq_func: ExpectedImprovement, bounds: Tensor) -> tuple[Tensor, Tensor]:
     """
     Optimizes the acquisition function and returns a new candidate and observation.
 
@@ -60,6 +54,8 @@ def optimize_acqf_and_get_observation(acq_func: ExpectedImprovement) -> tuple[Te
     ----------
     acq_func : ExpectedImprovement
         The acquisition function to be optimized.
+    bounds : Tensor
+        The bounds of the optimization space.
 
     Returns
     -------
@@ -67,7 +63,7 @@ def optimize_acqf_and_get_observation(acq_func: ExpectedImprovement) -> tuple[Te
         New candidate and observation.
     """
     # optimize
-    candidates, _ = optimize_acqf(acq_function=acq_func, bounds=bounds, num_restarts=100, raw_samples=10, q=1)
+    candidates, _ = optimize_acqf(acq_function=acq_func, bounds=bounds, num_restarts=10, raw_samples=512, q=1)
     # observe new values
     new_x = candidates.detach()  # Detach to avoid gradient updates
     new_obj = f(new_x)
@@ -76,27 +72,27 @@ def optimize_acqf_and_get_observation(acq_func: ExpectedImprovement) -> tuple[Te
 
 def run(train_X: Tensor, train_Y: Tensor, iterations: int = 100, verbose: bool = True):
 
-    mll, model = initialize_model(train_X, train_Y)
+    mll, model, bounds = initialize_model(train_X, train_Y)
 
     for i in range(iterations):
 
         t0 = time.monotonic()
 
-        # fit the models
+        # Re-fit model with new data: D =  D_old \cup D_new
         fit_gpytorch_model(mll)
 
-        # Use best_f observed so far
-        ei = ExpectedImprovement(model, best_f=train_Y.max())  # TODO: check that this is not meant to be min
+        # Use best_f (expected energy retained) observed so far
+        ei = ExpectedImprovement(model, best_f=train_Y.min(), maximize=False)
 
         # Optimise and get new observation
-        new_x, new_f = optimize_acqf_and_get_observation(ei)
+        new_x, new_f = optimize_acqf_and_get_observation(ei, bounds)
 
         # Update training points
         train_X = cat([train_X, new_x])
         train_Y = cat([train_Y, new_f])
 
         # Reinitialize the models so they are ready for fitting on next iteration
-        mll, model = initialize_model(train_X, train_Y)
+        mll, model = initialize_model(train_X, train_Y)  # TODO: with state-dict here?
 
         t1 = time.monotonic()
 
@@ -110,10 +106,13 @@ def run(train_X: Tensor, train_Y: Tensor, iterations: int = 100, verbose: bool =
         else:
             print(".", end="")
 
+        # Stopping criterion
+
     # TODO: add stoppping criterion
+    # TODO: save and load data/model through state_dict once the model is trained
+    # TODO: add B(x) constraints
 
 
 if __name__ == "__main__":
-    train_X = None
-    train_Y = None
+    train_X, train_Y, bounds = build_train_data()
     run(train_X=train_X, train_Y=train_Y)

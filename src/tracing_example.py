@@ -7,6 +7,8 @@ from src.trace.trace_boozer import TraceBoozer
 
 import numpy as np
 from mpi4py import MPI
+from torch import tensor, Tensor, stack, zeros, ones
+from sklearn.preprocessing import MinMaxScaler
 
 
 # MPI stuff
@@ -15,7 +17,8 @@ size = comm.Get_size()
 rank = comm.Get_rank()
 
 # choose an initial configuration
-vmec_input = "vmec_input_files/vmec_input_files/input.nfp4_QH_warm_start_high_res"
+# vmec_input = "../vmec_input_files/vmec_input_files/input.nfp4_QH_warm_start_high_res"
+vmec_input = "/Users/z004mktz/Code/fusion/alpha_particle_opt/src/vmec_input_files/input.nfp4_QH_warm_start_high_res"
 
 # number of Fourier modes for optimization
 max_mode = 1
@@ -100,4 +103,18 @@ def f(x):
     return res
 
 
-# TODO: now call a BO routine on rank 0
+def build_train_data() -> tuple[Tensor, Tensor, Tensor]:
+    d = len(x0)
+    y0 = f(x0)
+    # Standardise the output
+    train_y0 = (y0 - y0.mean()) / y0.std()
+    # Create the scaler object
+    scaler = MinMaxScaler(feature_range=(0, 1))
+    # Scale the values to the unit cube
+    scaled_values = scaler.fit_transform(x0)
+
+    train_X = tensor(scaled_values).unsqueeze(-1)
+    train_Y = tensor(train_y0).unsqueeze(-1)
+    bounds = stack([zeros(d), ones(d)])
+
+    return train_X, train_Y, bounds
