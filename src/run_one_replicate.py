@@ -3,71 +3,12 @@ Vanilla BO loop.
 """
 
 from torch import Tensor, cat
-from botorch.models import SingleTaskGP
 from botorch.fit import fit_gpytorch_model
-from gpytorch.mlls import ExactMarginalLogLikelihood
 from botorch.acquisition import ExpectedImprovement
-from botorch.optim import optimize_acqf
 import time
 
-from tracing_example import f, build_train_data  # Objective function
-
-
-def initialize_model(
-    train_X: Tensor, train_Y: Tensor, state_dict=None
-) -> tuple[ExactMarginalLogLikelihood, SingleTaskGP]:
-    """
-    Initialize the Krigeing model (Gaussian process regression) for the BO loop.
-
-    Parameters
-    ----------
-    train_X : Tensor
-        Training data.
-    train_Y : Tensor
-        Training labels.
-    state_dict : _type_, optional
-        _description_, by default None
-
-    Returns
-    -------
-    tuple[ExactMarginalLogLikelihood, SingleTaskGP]
-        The model and the marginal log likelihood.
-    """
-
-    # Build surrogate model (gp)
-    model = SingleTaskGP(
-        train_X=train_X,
-        train_Y=train_Y,
-    )  # Uses a scaled Matern kernel by default
-    mll = ExactMarginalLogLikelihood(model.likelihood, model)
-    # load state dict if it is passed
-    if state_dict is not None:
-        model.load_state_dict(state_dict)
-    return mll, model
-
-
-def optimize_acqf_and_get_observation(acq_func: ExpectedImprovement, bounds: Tensor) -> tuple[Tensor, Tensor]:
-    """
-    Optimizes the acquisition function and returns a new candidate and observation.
-
-    Parameters
-    ----------
-    acq_func : ExpectedImprovement
-        The acquisition function to be optimized.
-    bounds : Tensor
-        The bounds of the optimization space.
-
-    Returns
-    -------
-    tuple[Tensor, Tensor]
-        New candidate and observation.
-    """
-    # optimize
-    candidates, _ = optimize_acqf(acq_function=acq_func, bounds=bounds, num_restarts=10, raw_samples=512, q=1)
-    # observe new values
-    new_x = candidates.detach()  # Detach to avoid gradient updates
-    new_obj = f(new_x)
-    return new_x, new_obj
+from tracing_example import f, build_train_data
+from utils.bayes_opt import initialize_model, optimize_acqf_and_get_observation
 
 
 def run(train_X: Tensor, train_Y: Tensor, iterations: int = 100, verbose: bool = True):
@@ -85,7 +26,7 @@ def run(train_X: Tensor, train_Y: Tensor, iterations: int = 100, verbose: bool =
         ei = ExpectedImprovement(model, best_f=train_Y.min(), maximize=False)
 
         # Optimise and get new observation
-        new_x, new_f = optimize_acqf_and_get_observation(ei, bounds)
+        new_x, new_f = optimize_acqf_and_get_observation(f, ei, bounds)
 
         # Update training points
         train_X = cat([train_X, new_x])
@@ -100,7 +41,7 @@ def run(train_X: Tensor, train_Y: Tensor, iterations: int = 100, verbose: bool =
 
         if verbose:
             print(
-                f"\nIteration {i}: best objective value = " f"{best_f}, " f"time = {t1-t0:>4.2f}.",
+                f"\nIteration {i}: best objective value = " f"{best_f:>4.2f}, " f"time = {t1-t0:>4.2f}.",
                 end="",
             )
         else:
