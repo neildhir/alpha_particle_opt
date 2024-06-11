@@ -2,10 +2,10 @@ from botorch.models import SingleTaskGP
 from gpytorch.mlls import ExactMarginalLogLikelihood
 from botorch.acquisition import ExpectedImprovement
 from botorch.optim import optimize_acqf
-from torch import Tensor
+from torch import Tensor, tensor
 
 
-def initialize_model(
+def build_surrogate_model(
     train_X: Tensor, train_Y: Tensor, state_dict=None
 ) -> tuple[ExactMarginalLogLikelihood, SingleTaskGP]:
     """
@@ -38,6 +38,8 @@ def initialize_model(
     return mll, model
 
 
+
+
 def optimize_acqf_and_get_observation(
     f: callable, acq_func: ExpectedImprovement, bounds: Tensor
 ) -> tuple[Tensor, Tensor]:
@@ -59,8 +61,20 @@ def optimize_acqf_and_get_observation(
         New candidate and observation.
     """
     # optimize
-    candidates, _ = optimize_acqf(acq_function=acq_func, bounds=bounds, num_restarts=10, raw_samples=512, q=1)
+    constraints = None  # Placeholder
+    stopping_criterion = None  # Placeholder
+    candidates, _ = optimize_acqf(
+        acq_function=acq_func,
+        bounds=bounds,
+        nonlinear_inequality_constraints=constraints,
+        num_restarts=10,
+        raw_samples=512,
+        q=1,
+    )
     # observe new values
     new_x = candidates.detach()  # Detach to avoid gradient updates
+    raise ValueError(
+        "We should scale this to the unit cube but transform it back to the correct space before evaluating the objective function."
+    )
     new_obj = f(new_x.numpy().flatten())  # This is cumbersome, re-write
     return new_x, new_obj

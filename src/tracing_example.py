@@ -69,7 +69,7 @@ def f(x):
     """
     objective for minimization:
 
-    expected energy retatined
+    expected energy loss
       f = E[3.5*np.exp(-2*c_times/tmax)]
 
     x: array, vmec configuration variables
@@ -81,12 +81,12 @@ def f(x):
     stz_inits = np.ascontiguousarray(stz_inits)
     vpar_inits = np.ascontiguousarray(vpar_inits)
 
-    # compute confinement times
+    # compute confinement times (heavy)
     c_times = tracer.compute_confinement_times(x, stz_inits, vpar_inits, tmax)
 
     if np.any(~np.isfinite(c_times)):
         # vmec failed here; return worst possible value
-        c_times = np.zeros(len(vpars))  # TODO: Misha to fix this; vpars is undefined
+        c_times = np.zeros(len(vpar_inits))
 
     # energy retained by particle
     feat = 3.5 * np.exp(-2 * c_times / tmax)
@@ -101,6 +101,54 @@ def f(x):
     sys.stdout.flush()
 
     return res
+
+
+# Constraints on mirror ratio
+
+ns_B = 8  # maxB should be on boundary (so we could always just sample the boundary...)
+ntheta_B = 16
+nzeta_B = 16
+len_B_field_out = ns_B * ntheta_B * nzeta_B
+mirror_target = 1.35
+
+
+def compute_B_field(x):
+
+    # Compute modB on a grid
+
+    field, bri = tracer.compute_boozer_field(x)
+    if field is None:
+        return np.zeros(len_B_field_out)
+    modB = tracer.compute_modB(field, bri, ns=ns_B, ntheta=ntheta_B, nphi=nzeta_B)
+    if rank == 0:  # TODO: which rank does this refer to? MPI?
+        print("B interval:", np.min(modB), np.max(modB))
+        print("Mirror Ratio:", np.max(modB) / np.min(modB))
+
+    return modB
+
+
+def compute_constraints(x):
+    """
+    Nonlinear inequality constraints: equation (13) and (14) of [1], section 4.2.
+
+    References
+    ----------
+    [1] Bindel, David, Matt Landreman, and Misha Padidar. "Direct optimization of fast-ion confinement in stellarators." Plasma Physics and Controlled Fusion 65.6 (2023): 065012.
+    """
+
+    B_field = compute_B_field(x)
+
+    eps_B = (mirror_target - 1.0) / (mirror_target + 1.0)
+    B_ub = target_volavgB * (1 + eps_B) * B_field  # np.ones(len_B_field_out)
+    B_lb = target_volavgB * (1 - eps_B) * B_field  # np.ones(len_B_field_out)
+
+    # Translate to BoTorch
+    # lower_bound =
+    # # -X[0]+X[1]>=1
+    # inequality_constraints = [(tensor([0, 1]), tensor([-1.0, 1.0]), 1)]
+
+
+# Data wrangling
 
 
 def build_train_data() -> tuple[Tensor, Tensor, Tensor]:
