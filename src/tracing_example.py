@@ -104,17 +104,18 @@ def f(x):
 
 
 def build_train_data() -> tuple[Tensor, Tensor, Tensor]:
-    d = len(x0)
-    y0 = f(x0)
-    # Standardise the output
-    train_y0 = (y0 - y0.mean()) / y0.std()
-    # Create the scaler object
-    scaler = MinMaxScaler(feature_range=(0, 1))
-    # Scale the values to the unit cube
-    scaled_values = scaler.fit_transform(x0)
 
-    train_X = tensor(scaled_values).unsqueeze(-1)
-    train_Y = tensor(train_y0).unsqueeze(-1)
+    d = len(x0)  # Dimension of the input space (# of Fourier coefficients)
+    # Create the scaler object
+    # scaler = MinMaxScaler(feature_range=(0, 1))
+    # Scale the values to the unit cube
+    # scaled_values = scaler.fit_transform(x0.reshape(-1, 1))
+    train_X = tensor(x0).view(1, -1)  # 1 x d
+
+    # Standardise the output if vector valued
+    # train_y0 = (y0 - y0.mean()) / y0.std()
+    y0 = f(x0)
+    train_Y = tensor([y0]).unsqueeze(-1)
     bounds = stack([zeros(d), ones(d)])
 
     return train_X, train_Y, bounds

@@ -62,5 +62,5 @@ def optimize_acqf_and_get_observation(
     candidates, _ = optimize_acqf(acq_function=acq_func, bounds=bounds, num_restarts=10, raw_samples=512, q=1)
     # observe new values
     new_x = candidates.detach()  # Detach to avoid gradient updates
-    new_obj = f(new_x)
+    new_obj = f(new_x.numpy().flatten())  # This is cumbersome, re-write
     return new_x, new_obj
