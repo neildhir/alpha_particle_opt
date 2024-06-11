@@ -38,8 +38,6 @@ def build_surrogate_model(
     return mll, model
 
 
-
-
 def optimize_acqf_and_get_observation(
     f: callable, acq_func: ExpectedImprovement, bounds: Tensor
 ) -> tuple[Tensor, Tensor]:
@@ -60,6 +58,9 @@ def optimize_acqf_and_get_observation(
     tuple[Tensor, Tensor]
         New candidate and observation.
     """
+
+    # TODO: add constraints
+
     # optimize
     constraints = None  # Placeholder
     stopping_criterion = None  # Placeholder

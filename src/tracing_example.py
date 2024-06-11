@@ -8,7 +8,8 @@ from src.trace.trace_boozer import TraceBoozer
 import numpy as np
 from mpi4py import MPI
 from torch import tensor, Tensor, stack, zeros, ones
-from sklearn.preprocessing import MinMaxScaler
+
+# from sklearn.preprocessing import MinMaxScaler
 
 
 # MPI stuff
@@ -22,6 +23,7 @@ vmec_input = "/Users/z004mktz/Code/fusion/alpha_particle_opt/src/vmec_input_file
 
 # number of Fourier modes for optimization
 max_mode = 1
+d = 4 * max_mode**2 + 4 * max_mode
 
 # target aspect ratio (ARIES-CS)
 aspect_target = 7.0
@@ -103,16 +105,19 @@ def f(x):
     return res
 
 
-# Constraints on mirror ratio
+# Output constraints on mirror ratio
 
 ns_B = 8  # maxB should be on boundary (so we could always just sample the boundary...)
 ntheta_B = 16
 nzeta_B = 16
 len_B_field_out = ns_B * ntheta_B * nzeta_B
 mirror_target = 1.35
+eps_B = (mirror_target - 1.0) / (mirror_target + 1.0)
+B_ub = target_volavgB * (1 + eps_B) * np.ones(len_B_field_out)  # upper bound, eq. 14
+B_lb = target_volavgB * (1 - eps_B) * np.ones(len_B_field_out)  # lower bound, eq. 14
 
 
-def compute_B_field(x):
+def compute_B_field(x: np.ndarray):
 
     # Compute modB on a grid
 
@@ -127,25 +132,38 @@ def compute_B_field(x):
     return modB
 
 
-def compute_constraints(x):
+def f_constrained_by_B(x: np.ndarray):
     """
-    Nonlinear inequality constraints: equation (13) and (14) of [1], section 4.2.
+    Objective function constrained by the magnetic field strength. Nonlinear inequality constraints given by equation (13) and (14) of [1], section 4.2, for the allowable magnetic field strength.
+
+    References
+    ----------
+    [1] Bindel, David, Matt Landreman, and Misha Padidar. "Direct optimization of fast-ion confinement in stellarators." Plasma Physics and Controlled Fusion 65.6 (2023): 065012.
+    """
+    return B_lb <= compute_B_field(x) <= B_ub  # TODO: currently returns bool
+
+
+def acqf_inequality_constraints(x: np.ndarray):
+    """
+    This function returns the nonlinear inequality constraints for the acquisition function. Nonlinear inequality constraints: equation (13) and (14) of [1], section 4.2.
 
     References
     ----------
     [1] Bindel, David, Matt Landreman, and Misha Padidar. "Direct optimization of fast-ion confinement in stellarators." Plasma Physics and Controlled Fusion 65.6 (2023): 065012.
     """
 
-    B_field = compute_B_field(x)
+    # XXX: we could have separate constraints per dimension
 
-    eps_B = (mirror_target - 1.0) / (mirror_target + 1.0)
-    B_ub = target_volavgB * (1 + eps_B) * B_field  # np.ones(len_B_field_out)
-    B_lb = target_volavgB * (1 - eps_B) * B_field  # np.ones(len_B_field_out)
+    B_field = compute_B_field(x)  # TODO: cache this
+    B_field_diff_lower = lambda x: -(B_lb - compute_B_field(x))
+    B_field_diff_upper = lambda x: -(compute_B_field(x) - B_ub)
 
-    # Translate to BoTorch
-    # lower_bound =
-    # # -X[0]+X[1]>=1
-    # inequality_constraints = [(tensor([0, 1]), tensor([-1.0, 1.0]), 1)]
+    # TODO: check that this is indeed an intra-point constraint
+    nonlinear_inequality_constraints = [(B_field_diff_lower, True), (B_field_diff_upper, True)]
+
+    # TODO: clear cache before returning
+
+    return nonlinear_inequality_constraints
 
 
 # Data wrangling
@@ -153,7 +171,7 @@ def compute_constraints(x):
 
 def build_train_data() -> tuple[Tensor, Tensor, Tensor]:
 
-    d = len(x0)  # Dimension of the input space (# of Fourier coefficients)
+    assert d == len(x0)  # Dimension of the input space (# of Fourier coefficients)
     # Create the scaler object
     # scaler = MinMaxScaler(feature_range=(0, 1))
     # Scale the values to the unit cube
@@ -164,6 +182,7 @@ def build_train_data() -> tuple[Tensor, Tensor, Tensor]:
     # train_y0 = (y0 - y0.mean()) / y0.std()
     y0 = f(x0)
     train_Y = tensor([y0]).unsqueeze(-1)
+    # TODO remove bounds once have finished inequality constraints
     bounds = stack([zeros(d), ones(d)])
 
     return train_X, train_Y, bounds

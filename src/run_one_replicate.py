@@ -2,6 +2,8 @@
 Vanilla BO loop.
 """
 
+from os import environ
+
 from torch import Tensor, vstack
 from botorch.fit import fit_gpytorch_mll
 from botorch.acquisition import ExpectedImprovement
@@ -9,6 +11,8 @@ import time
 
 from tracing_example import f, build_train_data
 from utils.bayes_opt import build_surrogate_model, optimize_acqf_and_get_observation
+
+SMOKE_TEST = environ.get("SMOKE_TEST")
 
 
 def run(train_X: Tensor, train_Y: Tensor, bounds: Tensor, iterations: int = 5, verbose: bool = True) -> None:
