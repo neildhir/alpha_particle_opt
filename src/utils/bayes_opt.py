@@ -67,8 +67,8 @@ def optimize_acqf_and_get_observation(
         acq_function=acq_func,
         bounds=bounds,  # TODO: remove bounds once have finished inequality constraints or set to -inf and inf
         nonlinear_inequality_constraints=constraints,
-        num_restarts=10,
-        raw_samples=512,
+        num_restarts=10,  # XXX: perhaps reduce a spot
+        raw_samples=512,  # XXX: perhaps reduce a spot
         q=1,  # Explore methods which allow q > 1
     )
     # observe new values

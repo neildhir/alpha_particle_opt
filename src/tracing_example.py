@@ -19,7 +19,7 @@ rank = comm.Get_rank()
 
 # choose an initial configuration
 # vmec_input = "../vmec_input_files/vmec_input_files/input.nfp4_QH_warm_start_high_res"
-vmec_input = "/Users/z004mktz/Code/fusion/alpha_particle_opt/src/vmec_input_files/input.nfp4_QH_warm_start_high_res"
+vmec_input = "/Users/z004mktz/Code/fusion/alpha_particle_opt/src/vmec_input_files/input.nfp4_QH_warm_start_high_res"  # TODO: use the cold start of this file instead of the warm start
 
 # number of Fourier modes for optimization
 max_mode = 1
@@ -107,6 +107,8 @@ def f(x):
 
 # Output constraints on mirror ratio
 
+# TODO: for Misha; write constraint without BRI
+
 ns_B = 8  # maxB should be on boundary (so we could always just sample the boundary...)
 ntheta_B = 16
 nzeta_B = 16
@@ -125,7 +127,7 @@ def compute_B_field(x: np.ndarray):
     if field is None:
         return np.zeros(len_B_field_out)
     modB = tracer.compute_modB(field, bri, ns=ns_B, ntheta=ntheta_B, nphi=nzeta_B)
-    if rank == 0:  # TODO: which rank does this refer to? MPI?
+    if rank == 0:
         print("B interval:", np.min(modB), np.max(modB))
         print("Mirror Ratio:", np.max(modB) / np.min(modB))
 
