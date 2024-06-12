@@ -53,7 +53,7 @@ def run(train_X: Tensor, train_Y: Tensor, bounds: Tensor, iterations: int = 5, v
         train_X = vstack([train_X, new_x])
         train_Y = vstack([train_Y, new_f])
 
-        # Reinitialize the models so they are ready for fitting on next iteration
+        # Reinitialize the model so that it is ready for fitting on next iteration
         mll, model = build_surrogate_model(train_X, train_Y)  # TODO: with state-dict here?
 
         t1 = time.monotonic()
@@ -69,7 +69,6 @@ def run(train_X: Tensor, train_Y: Tensor, bounds: Tensor, iterations: int = 5, v
         # Stopping criterion
 
     # TODO: save and load data/model through state_dict once the model is trained
-    # TODO: add B(x) constraints
     # TODO: save results module
 
 

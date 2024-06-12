@@ -4,6 +4,8 @@ from botorch.acquisition import ExpectedImprovement
 from botorch.optim import optimize_acqf
 from torch import Tensor, tensor
 
+from src.tracing_example import acqf_nonlinear_inequality_constraints
+
 
 def build_surrogate_model(
     train_X: Tensor, train_Y: Tensor, state_dict=None
@@ -59,18 +61,15 @@ def optimize_acqf_and_get_observation(
         New candidate and observation.
     """
 
-    # TODO: add constraints
-
-    # optimize
-    constraints = None  # Placeholder
+    constraints = acqf_nonlinear_inequality_constraints
     stopping_criterion = None  # Placeholder
     candidates, _ = optimize_acqf(
         acq_function=acq_func,
-        bounds=bounds,
+        bounds=bounds,  # TODO: remove bounds once have finished inequality constraints or set to -inf and inf
         nonlinear_inequality_constraints=constraints,
         num_restarts=10,
         raw_samples=512,
-        q=1,
+        q=1,  # Explore methods which allow q > 1
     )
     # observe new values
     new_x = candidates.detach()  # Detach to avoid gradient updates

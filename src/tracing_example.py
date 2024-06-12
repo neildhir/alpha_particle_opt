@@ -140,10 +140,10 @@ def f_constrained_by_B(x: np.ndarray):
     ----------
     [1] Bindel, David, Matt Landreman, and Misha Padidar. "Direct optimization of fast-ion confinement in stellarators." Plasma Physics and Controlled Fusion 65.6 (2023): 065012.
     """
-    return B_lb <= compute_B_field(x) <= B_ub  # TODO: currently returns bool
+    return B_lb <= compute_B_field(x) <= B_ub  # TODO: currently returns bool, should be float if true else -inf?
 
 
-def acqf_inequality_constraints(x: np.ndarray):
+def acqf_nonlinear_inequality_constraints(x: np.ndarray) -> list[tuple[callable, bool]]:
     """
     This function returns the nonlinear inequality constraints for the acquisition function. Nonlinear inequality constraints: equation (13) and (14) of [1], section 4.2.
 
@@ -155,11 +155,12 @@ def acqf_inequality_constraints(x: np.ndarray):
     # XXX: we could have separate constraints per dimension
 
     B_field = compute_B_field(x)  # TODO: cache this
-    B_field_diff_lower = lambda x: -(B_lb - compute_B_field(x))
-    B_field_diff_upper = lambda x: -(compute_B_field(x) - B_ub)
+    # Equation 14
+    B_diff_lower = lambda x: -(B_lb - compute_B_field(x))  # Negated to conform to optimize_acqf docstring instructions
+    B_diff_upper = lambda x: -(compute_B_field(x) - B_ub)  # Negated to conform to optimize_acqf docstring instructions
 
     # TODO: check that this is indeed an intra-point constraint
-    nonlinear_inequality_constraints = [(B_field_diff_lower, True), (B_field_diff_upper, True)]
+    nonlinear_inequality_constraints = [(B_diff_lower, True), (B_diff_upper, True)]
 
     # TODO: clear cache before returning
 
