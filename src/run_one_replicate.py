@@ -9,13 +9,21 @@ from botorch.fit import fit_gpytorch_mll
 from botorch.acquisition import ExpectedImprovement
 import time
 
-from tracing_example import f, build_train_data
-from utils.bayes_opt import build_surrogate_model, optimize_acqf_and_get_observation
+from tracing_example import f, get_initial_BO_params
+from utils.bayes_opt import build_surrogate_model, optimize_acqf_and_get_new_point
 
-SMOKE_TEST = environ.get("SMOKE_TEST")
+SMOKE_TEST = environ.get("SMOKE_TEST")  # TODO: finish this
 
 
-def run(train_X: Tensor, train_Y: Tensor, bounds: Tensor, iterations: int = 5, verbose: bool = True) -> None:
+def run(
+    train_X: Tensor,
+    train_Y: Tensor,
+    bounds: Tensor,
+    nonlinear_inequality_constraints: list[tuple[callable, bool]],
+    SMOKE_TEST: bool,
+    iterations: int = 5,
+    verbose: bool = True,
+) -> None:
     """
     Run a full Bayesian optimization loop.
 
@@ -27,6 +35,8 @@ def run(train_X: Tensor, train_Y: Tensor, bounds: Tensor, iterations: int = 5, v
         Target (expected energy loss)
     bounds : Tensor
         Bounds of the optimization space
+    nonlinear_inequality_constraints : list[tuple[callable, bool]]
+        Magnetic field strength constraints as a function of x
     iterations : int, optional
         Number of operations, by default 5 -- will be replaced with a stopping criterion
     verbose : bool, optional
@@ -34,6 +44,8 @@ def run(train_X: Tensor, train_Y: Tensor, bounds: Tensor, iterations: int = 5, v
     """
 
     mll, model = build_surrogate_model(train_X, train_Y)
+
+    iterations = iterations if not SMOKE_TEST else 4
     for i in range(iterations):
 
         t0 = time.monotonic()
@@ -45,9 +57,8 @@ def run(train_X: Tensor, train_Y: Tensor, bounds: Tensor, iterations: int = 5, v
         ei = ExpectedImprovement(model, best_f=train_Y.min(), maximize=False)
 
         # Optimise and get new observation
-        # TODO: the bounds here are currently placeholders until we include correct inequality constraints, then we can remove bounds or replace upper and lower with -inf and inf respectively
         # TODO: add stoppping criterion
-        new_x, new_f = optimize_acqf_and_get_observation(f, ei, bounds)
+        new_x, new_f = optimize_acqf_and_get_new_point(f, ei, bounds, nonlinear_inequality_constraints, SMOKE_TEST)
 
         # Update training points
         train_X = vstack([train_X, new_x])
@@ -66,16 +77,15 @@ def run(train_X: Tensor, train_Y: Tensor, bounds: Tensor, iterations: int = 5, v
         else:
             print(".", end="")
 
-        # Stopping criterion
-
     # TODO: save and load data/model through state_dict once the model is trained
     # TODO: save results module
 
 
-# Reasonable domains for the Fourier coefficients?
-train_X, train_Y, bounds = build_train_data()
-run(train_X=train_X, train_Y=train_Y, bounds=bounds)
+train_X, train_Y, bounds, constraints = get_initial_BO_params()
+SMOKE_TEST = True
+run(train_X, train_Y, bounds, constraints, SMOKE_TEST)
 
 if __name__ == "__main__":
-    train_X, train_Y, bounds = build_train_data()
-    run(train_X=train_X, train_Y=train_Y, bounds=bounds)
+    train_X, train_Y, bounds, constraints = get_initial_BO_params()
+    SMOKE_TEST = True
+    run(train_X, train_Y, bounds, constraints, SMOKE_TEST)

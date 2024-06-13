@@ -40,8 +40,12 @@ def build_surrogate_model(
     return mll, model
 
 
-def optimize_acqf_and_get_observation(
-    f: callable, acq_func: ExpectedImprovement, bounds: Tensor
+def optimize_acqf_and_get_new_point(
+    f: callable,
+    acq_func: ExpectedImprovement,
+    bounds: Tensor,
+    nonlinear_inequality_constraints: list[tuple[callable, bool]],
+    SMOKE_TEST: bool,
 ) -> tuple[Tensor, Tensor]:
     """
     Optimizes the acquisition function and returns a new candidate and observation.
@@ -54,6 +58,8 @@ def optimize_acqf_and_get_observation(
         The acquisition function to be optimized.
     bounds : Tensor
         The bounds of the optimization space.
+    nonlinear_inequality_constraints : list[tuple[callable, bool]]
+        Magnetic field strength constraints as a function of x
 
     Returns
     -------
@@ -61,20 +67,21 @@ def optimize_acqf_and_get_observation(
         New candidate and observation.
     """
 
-    constraints = acqf_nonlinear_inequality_constraints
-    stopping_criterion = None  # Placeholder
+    NUM_RESTARTS = 10 if not SMOKE_TEST else 2
+    RAW_SAMPLES = 512 if not SMOKE_TEST else 32
+
+    stopping_criterion = None  # TODO: implement
     candidates, _ = optimize_acqf(
+        ic_generator=None,  # TODO: have to provide this
         acq_function=acq_func,
-        bounds=bounds,  # TODO: remove bounds once have finished inequality constraints or set to -inf and inf
-        nonlinear_inequality_constraints=constraints,
-        num_restarts=10,  # XXX: perhaps reduce a spot
-        raw_samples=512,  # XXX: perhaps reduce a spot
+        bounds=bounds,
+        nonlinear_inequality_constraints=nonlinear_inequality_constraints,
+        num_restarts=NUM_RESTARTS,  # XXX: perhaps reduce a spot
+        raw_samples=RAW_SAMPLES,  # XXX: perhaps reduce a spot
         q=1,  # Explore methods which allow q > 1
     )
     # observe new values
     new_x = candidates.detach()  # Detach to avoid gradient updates
-    raise ValueError(
-        "We should scale this to the unit cube but transform it back to the correct space before evaluating the objective function."
-    )
     new_obj = f(new_x.numpy().flatten())  # This is cumbersome, re-write
+
     return new_x, new_obj

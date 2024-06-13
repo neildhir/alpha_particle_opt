@@ -7,7 +7,7 @@ from src.trace.trace_boozer import TraceBoozer
 
 import numpy as np
 from mpi4py import MPI
-from torch import tensor, Tensor, stack, zeros, ones
+from torch import tensor, Tensor, stack, zeros, ones, inf
 
 # from sklearn.preprocessing import MinMaxScaler
 
@@ -19,7 +19,7 @@ rank = comm.Get_rank()
 
 # choose an initial configuration
 # vmec_input = "../vmec_input_files/vmec_input_files/input.nfp4_QH_warm_start_high_res"
-vmec_input = "/Users/z004mktz/Code/fusion/alpha_particle_opt/src/vmec_input_files/input.nfp4_QH_warm_start_high_res"  # TODO: use the cold start of this file instead of the warm start
+vmec_input = "/Users/z004mktz/Code/fusion/alpha_particle_opt/src/vmec_input_files/input.nfp4_QH_warm_start_high_res"  # TODO: use the cold start of this file instead of the warm start: input.nfp4_QH_cold_high_res
 
 # number of Fourier modes for optimization
 max_mode = 1
@@ -145,7 +145,7 @@ def f_constrained_by_B(x: np.ndarray):
     return B_lb <= compute_B_field(x) <= B_ub  # TODO: currently returns bool, should be float if true else -inf?
 
 
-def acqf_nonlinear_inequality_constraints(x: np.ndarray) -> list[tuple[callable, bool]]:
+def acqf_nonlinear_inequality_constraints() -> list[tuple[callable, bool]]:
     """
     This function returns the nonlinear inequality constraints for the acquisition function. Nonlinear inequality constraints: equation (13) and (14) of [1], section 4.2.
 
@@ -156,7 +156,7 @@ def acqf_nonlinear_inequality_constraints(x: np.ndarray) -> list[tuple[callable,
 
     # XXX: we could have separate constraints per dimension
 
-    B_field = compute_B_field(x)  # TODO: cache this
+    # TODO: better to cache compute_B_field, calling it twice atm
     # Equation 14
     B_diff_lower = lambda x: -(B_lb - compute_B_field(x))  # Negated to conform to optimize_acqf docstring instructions
     B_diff_upper = lambda x: -(compute_B_field(x) - B_ub)  # Negated to conform to optimize_acqf docstring instructions
@@ -164,7 +164,7 @@ def acqf_nonlinear_inequality_constraints(x: np.ndarray) -> list[tuple[callable,
     # TODO: check that this is indeed an intra-point constraint
     nonlinear_inequality_constraints = [(B_diff_lower, True), (B_diff_upper, True)]
 
-    # TODO: clear cache before returning
+    # XXX: clear cache before returning if we are caching compute_B_field(x)
 
     return nonlinear_inequality_constraints
 
@@ -172,20 +172,29 @@ def acqf_nonlinear_inequality_constraints(x: np.ndarray) -> list[tuple[callable,
 # Data wrangling
 
 
-def build_train_data() -> tuple[Tensor, Tensor, Tensor]:
+def get_initial_BO_params() -> tuple[Tensor, Tensor, Tensor, list[tuple[callable, bool]]]:
 
     assert d == len(x0)  # Dimension of the input space (# of Fourier coefficients)
+
+    # Features
+
     # Create the scaler object
     # scaler = MinMaxScaler(feature_range=(0, 1))
     # Scale the values to the unit cube
     # scaled_values = scaler.fit_transform(x0.reshape(-1, 1))
     train_X = tensor(x0).view(1, -1)  # 1 x d
 
+    # Targets
+
     # Standardise the output if vector valued
     # train_y0 = (y0 - y0.mean()) / y0.std()
     y0 = f(x0)
     train_Y = tensor([y0]).unsqueeze(-1)
-    # TODO remove bounds once have finished inequality constraints
-    bounds = stack([zeros(d), ones(d)])
 
-    return train_X, train_Y, bounds
+    # Bounds and constraints
+
+    # The upper and lower bounds and specified with inf because we have non-linear inequality constraints -- see docstring for optimize_acqf
+    bounds = tensor([[-inf] * d, [inf] * d])
+    constraints = acqf_nonlinear_inequality_constraints()
+
+    return train_X, train_Y, bounds, constraints
