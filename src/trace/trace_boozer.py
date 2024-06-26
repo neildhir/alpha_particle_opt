@@ -6,7 +6,7 @@ from simsopt.field.tracing import (
     MinToroidalFluxStoppingCriterion,
 )
 from simsopt.util.mpi import MpiPartition
-from simsopt.mhd import Vmec
+from simsopt.mhd import Vmec, vmec_compute_geometry
 from mpi4py import MPI
 
 from src.sample.radial_density import RadialDensity
@@ -351,6 +351,37 @@ class TraceBoozer:
         field.set_points(stz_grid)
         modB = field.modB().flatten()
         return modB
+
+    def compute_modB_vmec(self, ns=32, ntheta=32,nphi=32, smin=0.02, smax=1.0):
+        """
+        Compute |B| on a tensor product grid VMEC coordinates, (s, theta, phi).
+
+        ns, nphi, ntheta: number of samples per dimension.
+        smin, smax: min and max values of the normalized toroidal flux. floats in [0,1].
+
+        return a 1d array of evals, length ns*ntheta*nphi
+        """
+        # TODO: @neil, check this function works
+
+        self.surf.x = np.copy(x)
+        # try to run vmec
+        try:
+            self.vmec.run()
+        except:
+            # VMEC failure!
+            return []
+
+        # use fixed positions
+        s = np.linspace(s_min, s_max, ns)
+        theta = np.linspace(0, 2*np.pi, ntheta)
+        phi = np.linspace(0, 2*np.pi/self.surf.nfp, nphi)
+
+        # potentially run vmec and compute the geometric quantites
+        data = vmec_compute_geometry(self.vmec, s, theta, phi) # 3d array
+
+        # return a 1d array
+        modB = data.modB.flatten()
+        return np.copy(modB)
 
     def compute_mu(self, field, bri, stz_inits, vpar_inits):
         """
