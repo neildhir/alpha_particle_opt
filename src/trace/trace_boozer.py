@@ -352,7 +352,7 @@ class TraceBoozer:
         modB = field.modB().flatten()
         return modB
 
-    def compute_modB_vmec(self, ns=32, ntheta=32,nphi=32, smin=0.02, smax=1.0):
+    def compute_modB_vmec(self, ns=32, ntheta=32, nphi=32, smin=0.02, smax=1.0):
         """
         Compute |B| on a tensor product grid VMEC coordinates, (s, theta, phi).
 
@@ -373,11 +373,11 @@ class TraceBoozer:
 
         # use fixed positions
         s = np.linspace(s_min, s_max, ns)
-        theta = np.linspace(0, 2*np.pi, ntheta)
-        phi = np.linspace(0, 2*np.pi/self.surf.nfp, nphi)
+        theta = np.linspace(0, 2 * np.pi, ntheta)
+        phi = np.linspace(0, 2 * np.pi / self.surf.nfp, nphi)
 
         # potentially run vmec and compute the geometric quantites
-        data = vmec_compute_geometry(self.vmec, s, theta, phi) # 3d array
+        data = vmec_compute_geometry(self.vmec, s, theta, phi)  # 3d array
 
         # return a 1d array
         modB = data.modB.flatten()
