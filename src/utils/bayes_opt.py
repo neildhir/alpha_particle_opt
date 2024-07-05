@@ -71,6 +71,11 @@ def optimize_acqf_and_get_new_point(
     RAW_SAMPLES = 512 if not SMOKE_TEST else 32
 
     stopping_criterion = None  # TODO: implement
+    # acqf = qExpectedImprovement(model=m1, best_f=0.0)
+    # opt_inputs = OptimizeAcqfInputs(
+    # acq_function=acqf, bounds=bounds, q=1, num_restarts=1, **kwargs
+    # )
+    # ic_generator = opt_inputs.get_ic_generator()
     candidates, _ = optimize_acqf(
         ic_generator=None,  # TODO: have to provide this
         acq_function=acq_func,

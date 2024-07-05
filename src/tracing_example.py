@@ -156,17 +156,22 @@ def acqf_nonlinear_inequality_constraints() -> list[tuple[callable, bool]]:
 
     # XXX: we could have separate constraints per dimension
 
-    # TODO: better to cache compute_B_field, calling it twice atm
-    # Equation 14
-    B_diff_lower = lambda x: -(B_lb - compute_B_field(x))  # Negated to conform to optimize_acqf docstring instructions
-    B_diff_upper = lambda x: -(compute_B_field(x) - B_ub)  # Negated to conform to optimize_acqf docstring instructions
+    def create_constraints():
+        B_field_cache = {}
 
-    # TODO: check that this is indeed an intra-point constraint
-    nonlinear_inequality_constraints = [(B_diff_lower, True), (B_diff_upper, True)]
+        def get_B_field(x):
+            if x not in B_field_cache:
+                B_field_cache[x] = compute_B_field(x)
+            return B_field_cache[x]
 
-    # XXX: clear cache before returning if we are caching compute_B_field(x)
+        B_diff_lower = lambda x: -(B_lb - get_B_field(x))  # Negated to conform to optimize_acqf docstring instructions
+        B_diff_upper = lambda x: -(get_B_field(x) - B_ub)  # Negated to conform to optimize_acqf docstring instructions
 
-    return nonlinear_inequality_constraints
+        return [(B_diff_lower, True), (B_diff_upper, True)]
+
+    # XXX: clear cache before returning if we are caching compute_B_field(x)?
+
+    return create_constraints()
 
 
 # Data wrangling
