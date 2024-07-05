@@ -372,7 +372,7 @@ class TraceBoozer:
             return []
 
         # use fixed positions
-        s = np.linspace(s_min, s_max, ns)
+        s = np.linspace(smin, smax, ns)
         theta = np.linspace(0, 2 * np.pi, ntheta)
         phi = np.linspace(0, 2 * np.pi / self.surf.nfp, nphi)
 
