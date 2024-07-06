@@ -352,10 +352,11 @@ class TraceBoozer:
         modB = field.modB().flatten()
         return modB
 
-    def compute_modB_vmec(self, ns=32, ntheta=32, nphi=32, smin=0.02, smax=1.0):
+    def compute_modB_vmec(self, x, ns=32, ntheta=32, nphi=32, smin=0.02, smax=1.0):
         """
         Compute |B| on a tensor product grid VMEC coordinates, (s, theta, phi).
 
+        x: np array, vmec variable vector.
         ns, nphi, ntheta: number of samples per dimension.
         smin, smax: min and max values of the normalized toroidal flux. floats in [0,1].
 

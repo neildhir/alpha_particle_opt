@@ -134,13 +134,13 @@ def compute_B_field(x: np.ndarray):
     return modB
 
 
-def compute_B_field_vmec():
+def compute_B_field_vmec(x: np.ndarray):
     """
     Use VMEC to compute the B field.
     """
     # TODO: @neil, check this function runs.
     # Compute modB on a grid
-    modB = tracer.compute_modB_vmec(ns=ns_B, ntheta=ntheta_B, nphi=nzeta_B)
+    modB = tracer.compute_modB_vmec(x, ns=ns_B, ntheta=ntheta_B, nphi=nzeta_B)
 
     # VMEC failure
     if modB == []:
