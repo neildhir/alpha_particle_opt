@@ -17,9 +17,8 @@ comm = MPI.COMM_WORLD
 size = comm.Get_size()
 rank = comm.Get_rank()
 
-# choose an initial configuration
-# vmec_input = "../vmec_input_files/vmec_input_files/input.nfp4_QH_warm_start_high_res"
-vmec_input = "/Users/z004mktz/Code/fusion/alpha_particle_opt/src/vmec_input_files/input.nfp4_QH_cold_high_res"  # Used the cold start (input.nfp4_QH_cold_high_res) of this file instead of the default warm start (input.nfp4_QH_warm_start_high_res)
+# Choose an initial configuration
+vmec_input_file = "/Users/z004mktz/Code/fusion/alpha_particle_opt/src/vmec_input_files/input.nfp4_QH_cold_high_res"  # Used the cold start (input.nfp4_QH_cold_high_res) of this file instead of the default warm start (input.nfp4_QH_warm_start_high_res)
 
 # number of Fourier modes for optimization
 max_mode = 1
@@ -46,8 +45,19 @@ interpolant_level = 8
 bri_mpol = 8
 bri_ntor = 8
 
+# Output constraints on mirror ratio
+
+ns_B = 8  # maxB should be on boundary (so we could always just sample the boundary...)
+ntheta_B = 16
+nzeta_B = 16
+len_B_field_out = ns_B * ntheta_B * nzeta_B
+mirror_target = 1.35
+eps_B = (mirror_target - 1.0) / (mirror_target + 1.0)
+B_ub = target_volavgB * (1 + eps_B) * np.ones(len_B_field_out)  # upper bound, eq. 14
+B_lb = target_volavgB * (1 - eps_B) * np.ones(len_B_field_out)  # lower bound, eq. 14
+
 tracer = TraceBoozer(
-    vmec_input,  # vmec input file
+    vmec_input_file,  # vmec input file
     n_partitions=1,  # number of partitions for vmec (always use 1)
     max_mode=max_mode,  # maximum fourier modes for boundary
     major_radius=major_radius,  # major radius
@@ -105,35 +115,6 @@ def f(x):
     return res
 
 
-# Output constraints on mirror ratio
-
-# TODO: for Misha; write constraint without BRI
-
-ns_B = 8  # maxB should be on boundary (so we could always just sample the boundary...)
-ntheta_B = 16
-nzeta_B = 16
-len_B_field_out = ns_B * ntheta_B * nzeta_B
-mirror_target = 1.35
-eps_B = (mirror_target - 1.0) / (mirror_target + 1.0)
-B_ub = target_volavgB * (1 + eps_B) * np.ones(len_B_field_out)  # upper bound, eq. 14
-B_lb = target_volavgB * (1 - eps_B) * np.ones(len_B_field_out)  # lower bound, eq. 14
-
-
-def compute_B_field(x: np.ndarray) -> np.ndarray:
-
-    # Compute modB on a grid
-
-    field, bri = tracer.compute_boozer_field(x)
-    if field is None:
-        return np.zeros(len_B_field_out)
-    modB = tracer.compute_modB(field, bri, ns=ns_B, ntheta=ntheta_B, nphi=nzeta_B)
-    if rank == 0:
-        print("B interval:", np.min(modB), np.max(modB))
-        print("Mirror Ratio:", np.max(modB) / np.min(modB))
-
-    return modB
-
-
 def compute_B_field_vmec(x: np.ndarray) -> np.ndarray:
     """
     Use VMEC to compute the B field.
@@ -154,17 +135,6 @@ def compute_B_field_vmec(x: np.ndarray) -> np.ndarray:
     return modB
 
 
-def f_constrained_by_B(x: np.ndarray):
-    """
-    Objective function constrained by the magnetic field strength. Nonlinear inequality constraints given by equation (13) and (14) of [1], section 4.2, for the allowable magnetic field strength.
-
-    References
-    ----------
-    [1] Bindel, David, Matt Landreman, and Misha Padidar. "Direct optimization of fast-ion confinement in stellarators." Plasma Physics and Controlled Fusion 65.6 (2023): 065012.
-    """
-    return B_lb <= compute_B_field(x) <= B_ub  # TODO: currently returns bool, should be float if true else -inf?
-
-
 def acqf_nonlinear_inequality_constraints() -> list[tuple[callable, bool]]:
     """
     This function returns the nonlinear inequality constraints for the acquisition function. Nonlinear inequality constraints: equation (13) and (14) of [1], section 4.2.
@@ -181,7 +151,7 @@ def acqf_nonlinear_inequality_constraints() -> list[tuple[callable, bool]]:
 
         def get_B_field(x):
             if x not in B_field_cache:
-                B_field_cache[x] = compute_B_field(x)
+                B_field_cache[x] = compute_B_field_vmec(x)
             return B_field_cache[x]
 
         B_diff_lower = lambda x: -(B_lb - get_B_field(x))  # Negated to conform to optimize_acqf docstring instructions
@@ -194,10 +164,7 @@ def acqf_nonlinear_inequality_constraints() -> list[tuple[callable, bool]]:
     return create_constraints()
 
 
-# Data wrangling
-
-
-def get_initial_BO_params() -> tuple[Tensor, Tensor, Tensor, list[tuple[callable, bool]]]:
+def build_BO_params() -> tuple[Tensor, Tensor, Tensor, list[tuple[callable, bool]]]:
 
     assert d == len(x0)  # Dimension of the input space (# of Fourier coefficients)
 
@@ -223,6 +190,23 @@ def get_initial_BO_params() -> tuple[Tensor, Tensor, Tensor, list[tuple[callable
     constraints = acqf_nonlinear_inequality_constraints()
 
     return train_X, train_Y, bounds, constraints
+
+
+def compute_B_field(x: np.ndarray) -> np.ndarray:
+
+    raise DeprecationWarning("This function is deprecated. Use compute_B_field_vmec instead.")
+
+    # Compute modB on a grid
+
+    field, bri = tracer.compute_boozer_field(x)
+    if field is None:
+        return np.zeros(len_B_field_out)
+    modB = tracer.compute_modB(field, bri, ns=ns_B, ntheta=ntheta_B, nphi=nzeta_B)
+    if rank == 0:
+        print("B interval:", np.min(modB), np.max(modB))
+        print("Mirror Ratio:", np.max(modB) / np.min(modB))
+
+    return modB
 
 
 if __name__ == "__main__":

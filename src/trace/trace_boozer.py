@@ -33,6 +33,11 @@ class TraceBoozer:
         interpolant_level=8,
         bri_mpol=32,
         bri_ntor=32,
+        ns_B=8,
+        ntheta_B=16,
+        nzeta_B=16,
+        smin=0.02,
+        smax=1.0,
     ):
         """
         vmec_input: vmec input file
@@ -114,6 +119,7 @@ class TraceBoozer:
         target_avg_minor_rad = major_radius / aspect_target  # target avg minor radius
         self.vmec.indata.phiedge = np.pi * (target_avg_minor_rad**2) * target_volavgB
         self.vmec.need_to_run_code = True
+
         # self.vmec.run()
         # print('aspect',self.vmec.aspect())
         # print('volavgB',self.vmec.wout.volavgB)
@@ -134,6 +140,16 @@ class TraceBoozer:
         self.x_field = np.zeros(self.dim_x)
         self.field = None
         self.bri = None
+
+        # Precompute and cache the default grid
+        self._cached_grid_params = (ns_B, ntheta_B, nzeta_B, smin, smax)
+        self._cached_grid = self._compute_grid(*self._cached_grid_params)
+
+    def _compute_grid(self, ns, ntheta, nphi, smin, smax):
+        s = np.linspace(smin, smax, ns)
+        theta = np.linspace(0, 2 * np.pi, ntheta)
+        phi = np.linspace(0, 2 * np.pi / self.surf.nfp, nphi)
+        return s, theta, phi
 
     def expand_x(self, max_mode):
         """
@@ -352,7 +368,6 @@ class TraceBoozer:
         modB = field.modB().flatten()
         return modB
 
-    # TODO: @neil, check this function works
     def compute_modB_vmec(
         self, x: np.ndarray, ns: int = 32, ntheta: int = 32, nphi: int = 32, smin: float = 0.02, smax: float = 1.0
     ) -> np.ndarray:
@@ -390,17 +405,22 @@ class TraceBoozer:
             # VMEC failure!
             return []
 
-        # use fixed positions
-        s = np.linspace(smin, smax, ns)
-        theta = np.linspace(0, 2 * np.pi, ntheta)
-        phi = np.linspace(0, 2 * np.pi / self.surf.nfp, nphi)
+        # Check if we can use the cached grid
+        if (ns, ntheta, nphi, smin, smax) == self._cached_grid_params:
+            s, theta, phi = self._cached_grid
+        else:
+            # Compute new grid and update cache
+            self._cached_grid = self._compute_grid(ns, ntheta, nphi, smin, smax)
+            self._cached_grid_params = (ns, ntheta, nphi, smin, smax)
+            s, theta, phi = self._cached_grid
 
         # potentially run vmec and compute the geometric quantites
+        # TODO: @misha why does it say potentially run vmec?
         data = vmec_compute_geometry(self.vmec, s, theta, phi)  # 3d array
 
         # return a 1d array
         modB = data.modB.flatten()
-        return np.copy(modB)
+        return np.copy(modB)  # TODO: @misha, why are we copying this?
 
     def compute_mu(self, field, bri, stz_inits, vpar_inits):
         """

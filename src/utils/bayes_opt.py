@@ -2,9 +2,7 @@ from botorch.models import SingleTaskGP
 from gpytorch.mlls import ExactMarginalLogLikelihood
 from botorch.acquisition import ExpectedImprovement
 from botorch.optim import optimize_acqf
-from torch import Tensor, tensor
-
-from src.tracing_example import acqf_nonlinear_inequality_constraints
+from torch import Tensor
 
 
 def build_surrogate_model(
@@ -59,12 +57,20 @@ def optimize_acqf_and_get_new_point(
     bounds : Tensor
         The bounds of the optimization space.
     nonlinear_inequality_constraints : list[tuple[callable, bool]]
-        Magnetic field strength constraints as a function of x
+        Magnetic field strength constraints as a function of x, see eq. (13) and (14) of [1], section 4.2.
 
     Returns
     -------
     tuple[Tensor, Tensor]
         New candidate and observation.
+
+    Notes
+    -----
+    The ic_generator is a function that generates initial conditions (starting points) for the optimization that satisfy the nonlinear constraints. It is crucial because it helps the optimizer start from feasible points.
+
+    References
+    ----------
+    [1] Bindel, David, Matt Landreman, and Misha Padidar. "Direct optimization of fast-ion confinement in stellarators." Plasma Physics and Controlled Fusion 65.6 (2023): 065012.
     """
 
     NUM_RESTARTS = 10 if not SMOKE_TEST else 2
@@ -76,6 +82,9 @@ def optimize_acqf_and_get_new_point(
     # acq_function=acqf, bounds=bounds, q=1, num_restarts=1, **kwargs
     # )
     # ic_generator = opt_inputs.get_ic_generator()
+
+    # Initial condition (IC) generation is a fairly unsupported feature in BoTorch (at the time or writing). For details see: https://github.com/pytorch/botorch/issues/1572
+
     candidates, _ = optimize_acqf(
         ic_generator=None,  # TODO: have to provide this
         acq_function=acq_func,
@@ -90,3 +99,12 @@ def optimize_acqf_and_get_new_point(
     new_obj = f(new_x.numpy().flatten())  # This is cumbersome, re-write
 
     return new_x, new_obj
+
+
+def initial_candidate_generator(n: int, **kwargs) -> Tensor:
+    # Generate n initial conditions that satisfy your constraints
+    # This is a simple example; you'll need to adapt it to your specific constraints
+    samples = torch.rand(n, d)  # d is the dimension of your search space
+    while not all(constraint(samples) <= 0):
+        samples = torch.rand(n, d)
+    return samples

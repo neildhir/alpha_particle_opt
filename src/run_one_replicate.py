@@ -1,7 +1,3 @@
-"""
-Vanilla BO loop.
-"""
-
 from os import environ
 
 from torch import Tensor, vstack
@@ -9,7 +5,7 @@ from botorch.fit import fit_gpytorch_mll
 from botorch.acquisition import ExpectedImprovement
 import time
 
-from tracing_example import f, get_initial_BO_params
+from tracing_example import f, build_BO_params
 from utils.bayes_opt import build_surrogate_model, optimize_acqf_and_get_new_point
 
 SMOKE_TEST = environ.get("SMOKE_TEST")  # TODO: finish this
@@ -25,7 +21,7 @@ def run(
     verbose: bool = True,
 ) -> None:
     """
-    Run a full Bayesian optimization loop.
+    Runs a Bayesian optimization loop up to stopping criterion or until number of iterations have been exhausted.
 
     Parameters
     ----------
@@ -81,11 +77,11 @@ def run(
     # TODO: save results module
 
 
-train_X, train_Y, bounds, constraints = get_initial_BO_params()
+train_X, train_Y, bounds, constraints = build_BO_params()
 SMOKE_TEST = True
 run(train_X, train_Y, bounds, constraints, SMOKE_TEST)
 
 if __name__ == "__main__":
-    train_X, train_Y, bounds, constraints = get_initial_BO_params()
+    train_X, train_Y, bounds, constraints = build_BO_params()
     SMOKE_TEST = True
     run(train_X, train_Y, bounds, constraints, SMOKE_TEST)
