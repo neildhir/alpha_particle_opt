@@ -324,7 +324,7 @@ class TraceBoozer:
         )
 
         # Construct 3D interpolation
-        nfp = self.vmec.wout.nfp
+        nfp = self.vmec.wout.nfp  # This is raising a false negative
         srange = (0, 1, self.interpolant_level)
         thetarange = (0, np.pi, self.interpolant_level)
         zetarange = (0, 2 * np.pi / nfp, self.interpolant_level)
@@ -352,17 +352,35 @@ class TraceBoozer:
         modB = field.modB().flatten()
         return modB
 
-    def compute_modB_vmec(self, x, ns=32, ntheta=32, nphi=32, smin=0.02, smax=1.0):
+    # TODO: @neil, check this function works
+    def compute_modB_vmec(
+        self, x: np.ndarray, ns: int = 32, ntheta: int = 32, nphi: int = 32, smin: float = 0.02, smax: float = 1.0
+    ) -> np.ndarray:
         """
         Compute |B| on a tensor product grid VMEC coordinates, (s, theta, phi).
 
-        x: np array, vmec variable vector.
-        ns, nphi, ntheta: number of samples per dimension.
-        smin, smax: min and max values of the normalized toroidal flux. floats in [0,1].
+        # TODO: @misha, can you document why we re-wrote this function just for future reference, my mind is already starting to forget why.
 
-        return a 1d array of evals, length ns*ntheta*nphi
+        Parameters
+        ----------
+        x : np.ndarray
+            vmec variable vector.
+        ns : int, optional
+            number of samples per dimension, by default 32
+        ntheta : int, optional
+            number of samples per dimension, by default 32
+        nphi : int, optional
+            number of samples per dimension, by default 32
+        smin : float, optional
+            values of the normalized toroidal flux, by default 0.02
+        smax : float, optional
+            values of the normalized toroidal flux, by default 1.0
+
+        Returns
+        -------
+        np.ndarray
+            1d array of evals, length ns*ntheta*nphi
         """
-        # TODO: @neil, check this function works
 
         self.surf.x = np.copy(x)
         # try to run vmec

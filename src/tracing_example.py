@@ -19,7 +19,7 @@ rank = comm.Get_rank()
 
 # choose an initial configuration
 # vmec_input = "../vmec_input_files/vmec_input_files/input.nfp4_QH_warm_start_high_res"
-vmec_input = "/Users/z004mktz/Code/fusion/alpha_particle_opt/src/vmec_input_files/input.nfp4_QH_warm_start_high_res"  # TODO: use the cold start of this file instead of the warm start: input.nfp4_QH_cold_high_res
+vmec_input = "/Users/z004mktz/Code/fusion/alpha_particle_opt/src/vmec_input_files/input.nfp4_QH_cold_high_res"  # Used the cold start (input.nfp4_QH_cold_high_res) of this file instead of the default warm start (input.nfp4_QH_warm_start_high_res)
 
 # number of Fourier modes for optimization
 max_mode = 1
@@ -119,7 +119,7 @@ B_ub = target_volavgB * (1 + eps_B) * np.ones(len_B_field_out)  # upper bound, e
 B_lb = target_volavgB * (1 - eps_B) * np.ones(len_B_field_out)  # lower bound, eq. 14
 
 
-def compute_B_field(x: np.ndarray):
+def compute_B_field(x: np.ndarray) -> np.ndarray:
 
     # Compute modB on a grid
 
@@ -134,16 +134,16 @@ def compute_B_field(x: np.ndarray):
     return modB
 
 
-def compute_B_field_vmec(x: np.ndarray):
+def compute_B_field_vmec(x: np.ndarray) -> np.ndarray:
     """
     Use VMEC to compute the B field.
     """
-    # TODO: @neil, check this function runs.
     # Compute modB on a grid
     modB = tracer.compute_modB_vmec(x, ns=ns_B, ntheta=ntheta_B, nphi=nzeta_B)
 
     # VMEC failure
-    if modB == []:
+    # TODO: @misha check this failure condition. It is ambigous, I changed it from if modB == [] but that is not a good condition since it will try to compare (numerical) modB against an empty list which is undefined. Check line 391 of tracer_boozer.py if there is a better way to assign the empty array, can be we np.empty(vec_len) instead? I don't want to change it myself in case there are downstream effects that I don't know about.
+    if not modB:
         return np.zeros(len_B_field_out)
 
     # print some stuff
@@ -223,3 +223,9 @@ def get_initial_BO_params() -> tuple[Tensor, Tensor, Tensor, list[tuple[callable
     constraints = acqf_nonlinear_inequality_constraints()
 
     return train_X, train_Y, bounds, constraints
+
+
+if __name__ == "__main__":
+    # Test new B-field computation which only uses vmec
+    out = compute_B_field_vmec(x0)
+    print(out)
