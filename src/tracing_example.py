@@ -50,6 +50,8 @@ bri_ntor = 8
 ns_B = 8  # maxB should be on boundary (so we could always just sample the boundary...)
 ntheta_B = 16
 nzeta_B = 16
+smin = 0.02
+smax = 1.0
 len_B_field_out = ns_B * ntheta_B * nzeta_B
 mirror_target = 1.35
 eps_B = (mirror_target - 1.0) / (mirror_target + 1.0)
@@ -68,7 +70,13 @@ tracer = TraceBoozer(
     interpolant_level=interpolant_level,
     bri_mpol=bri_mpol,
     bri_ntor=bri_ntor,
+    ns_B=ns_B,
+    ntheta_B=ntheta_B,
+    nzeta_B=nzeta_B,
+    smin=smin,
+    smax=smax,
 )
+
 # sync seeds across MPI ranks
 tracer.sync_seeds()
 
@@ -120,7 +128,7 @@ def compute_B_field_vmec(x: np.ndarray) -> np.ndarray:
     Use VMEC to compute the B field.
     """
     # Compute modB on a grid
-    modB = tracer.compute_modB_vmec(x, ns=ns_B, ntheta=ntheta_B, nphi=nzeta_B)
+    modB = tracer.compute_modB_vmec(x, ns=ns_B, ntheta=ntheta_B, nphi=nzeta_B, smin=smin, smax=smax)
 
     # VMEC failure
     # TODO: @misha check this failure condition. It is ambigous, I changed it from if modB == [] but that is not a good condition since it will try to compare (numerical) modB against an empty list which is undefined. Check line 391 of tracer_boozer.py if there is a better way to assign the empty array, can be we np.empty(vec_len) instead? I don't want to change it myself in case there are downstream effects that I don't know about.
@@ -149,7 +157,21 @@ def acqf_nonlinear_inequality_constraints() -> list[tuple[callable, bool]]:
     def create_constraints():
         B_field_cache = {}
 
-        def get_B_field(x):
+        def get_B_field(x: np.ndarray) -> dict[np.ndarray, np.ndarray]:
+            """
+            Functions caches the B field values for a given x so that we don't have to recompute it.
+
+            Parameters
+            ----------
+            x : np.ndarray
+                Input
+
+            Returns
+            -------
+            dict[np.ndarray, np.ndarray]
+                B field values for a given x
+            """
+
             if x not in B_field_cache:
                 B_field_cache[x] = compute_B_field_vmec(x)
             return B_field_cache[x]
@@ -158,8 +180,6 @@ def acqf_nonlinear_inequality_constraints() -> list[tuple[callable, bool]]:
         B_diff_upper = lambda x: -(get_B_field(x) - B_ub)  # Negated to conform to optimize_acqf docstring instructions
 
         return [(B_diff_lower, True), (B_diff_upper, True)]
-
-    # XXX: clear cache before returning if we are caching compute_B_field(x)?
 
     return create_constraints()
 

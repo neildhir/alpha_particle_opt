@@ -22,128 +22,102 @@ class TraceBoozer:
 
     def __init__(
         self,
-        vmec_input,
-        n_partitions=1,
-        max_mode=-1,
-        major_radius=13.6,
-        aspect_target=8.0,
-        target_volavgB=5.0,
-        tracing_tol=1e-8,
-        interpolant_degree=3,
-        interpolant_level=8,
-        bri_mpol=32,
-        bri_ntor=32,
-        ns_B=8,
-        ntheta_B=16,
-        nzeta_B=16,
-        smin=0.02,
-        smax=1.0,
-    ):
+        vmec_input: str,
+        n_partitions: int = 1,
+        max_mode: int = -1,
+        major_radius: float = 13.6,
+        aspect_target: float = 8.0,
+        target_volavgB: float = 5.0,
+        tracing_tol: float = 1e-8,
+        interpolant_degree: int = 3,
+        interpolant_level: int = 8,
+        bri_mpol: int = 32,
+        bri_ntor: int = 32,
+        ns_B: int = 8,
+        ntheta_B: int = 16,
+        nzeta_B: int = 16,
+        smin: float = 0.02,
+        smax: float = 1.0,
+    ) -> None:
         """
-        vmec_input: vmec input file
-        n_partitions: number of partitions used by vmec mpi.
-        max_mode: number of modes used by vmec
-        major_radius: will rescale entire device so that this is the major radius.
-                  If the surface is purely a torus, then setting the major and minor radius
-                  like this will give you the right aspect ratio. But if the surface
-                  is not a normal torus, then the aspect ratio may be much smaller or larger.
-        target_volavgB: will set phiedge so that this is the volume averge |B|.
-                        phiedge= pi* a^2 * B approximately, so we try to rescale to
-                        achieve the target B value.
-        tracing_tol:a tolerance used to determine the accuracy of the tracing
-        interpolant_degree: degree of the polynomial interpolants used for
-          interpolating the field. 1 is fast but innacurate, 3 is slower but more accurate.
-        interpolant_level: number of points used to interpolate the boozer radial
-          interpolant (per direction). 5=fast/innacurate, 8=medium, 12=slow/accurate
-        bri_mpol,bri_ntor: number of poloidal and toroidal modes used in BoozXform,
-            less modes. 16 is faster than 32.
+        Initialize the TraceBoozer class.
+
+        Parameters:
+        ----------
+        vmec_input : str
+            Path to the VMEC input file.
+        n_partitions : int, default 1
+            Number of partitions used by VMEC MPI.
+        max_mode : int, default -1
+            Number of modes used by VMEC. If -1, uses VMEC's default.
+        major_radius : float, default 13.6
+            Target major radius for rescaling the device.
+        aspect_target : float, default 8.0
+            Target aspect ratio for the device.
+        target_volavgB : float, default 5.0
+            Target volume-averaged |B| for setting phiedge.
+        tracing_tol : float, default 1e-8
+            Tolerance for determining tracing accuracy.
+        interpolant_degree : int, default 3
+            Degree of polynomial interpolants for field interpolation.
+            1: fast but inaccurate, 3: slower but more accurate.
+        interpolant_level : int, default 8
+            Number of points per direction for Boozer radial interpolant.
+            5: fast/inaccurate, 8: medium, 12: slow/accurate.
+        bri_mpol, bri_ntor : int, default 32
+            Number of poloidal and toroidal modes used in BoozXform.
+            Lower values (e.g., 16) are faster.
+        ns_B, ntheta_B, nzeta_B : int, default 8, 16, 16
+            Grid dimensions for field computation.
+        smin, smax : float, default 0.02, 1.0
+            Minimum and maximum values of the normalized toroidal flux.
+
+        Notes:
+        -----
+        - The device is rescaled to achieve the specified major_radius.
+        - The aspect ratio may differ from aspect_target for non-toroidal surfaces.
+        - phiedge is set to approximate pi * a^2 * B, where 'a' is the minor radius.
         """
 
-        self.vmec_input = vmec_input
-        self.max_mode = max_mode
+        self.vmec_input: str = vmec_input
+        self.max_mode: int = max_mode
 
-        # For RZFourier rep
-        self.mpi = MpiPartition(n_partitions)
-        self.vmec = Vmec(vmec_input, mpi=self.mpi, keep_all_files=False, verbose=False)
-        # get the boundary rep
+        # Initialize VMEC
+        self.mpi: MpiPartition = MpiPartition(n_partitions)
+        self.vmec: Vmec = Vmec(vmec_input, mpi=self.mpi, keep_all_files=False, verbose=False)
         self.surf = self.vmec.boundary
 
-        if max_mode < 0:
-            mpol = self.surf.mpol
-            ntor = self.surf.ntor
-        else:
-            mpol = max_mode
-            ntor = max_mode
-
-        # if len(x0) > 0:
-        #  """
-        #  Load a point with. We assume that x0_max_mode <= max_mode, that
-        #  the major radius of the configuration was fixed and is not represented
-        #  in the array x0.
-        #  We assume that the toroidal flux was rescaled by target_volavgB.
-        #  """
-        #  assert x0_max_mode <= max_mode,"we cannot decrease the max_mode"
-        #  # set up the boundary representation for x0
-        #  self.surf.fix_all()
-        #  self.surf.fixed_range(mmin=0, mmax=x0_max_mode,
-        #                   nmin=-x0_max_mode, nmax=x0_max_mode, fixed=False)
-
-        #  # rescale the vmec_input point to the major radius
-        #  factor = major_radius/self.surf.get("rc(0,0)")
-        #  self.surf.x = self.surf.x*factor
-        #  self.surf.set("rc(0,0)",major_radius)
-        #  self.surf.fix("rc(0,0)") # fix the Major radius
-
-        #  # set the toroidal flux based off the vmec input, not the current point
-        #  #avg_minor_rad = self.surf.get('rc(0,0)')/self.surf.aspect_ratio() # true avg minor radius
-        #  target_avg_minor_rad = major_radius/aspect_target # target avg minor radius
-        #  self.vmec.indata.phiedge = np.pi*(target_avg_minor_rad**2)*target_volavgB
-        #  self.vmec.need_to_run_code = True
-
-        #  # now set x0 as the boundary
-        #  self.surf.x = np.copy(x0)
-
-        # set the desired resolution
+        # Set resolution
+        mpol = ntor = self.max_mode if self.max_mode > 0 else self.surf.mpol
         self.surf.fix_all()
         self.surf.fixed_range(mmin=0, mmax=mpol, nmin=-ntor, nmax=ntor, fixed=False)
 
-        # rescale the surface by the major radius; if we havent already.
-        factor = major_radius / self.surf.get("rc(0,0)")
-        self.surf.x = self.surf.x * factor
-
-        # fix the major radius
+        # Rescale surface and set toroidal flux
+        factor: float = major_radius / self.surf.get("rc(0,0)")
+        self.surf.x *= factor
         self.surf.fix("rc(0,0)")
 
-        # rescale the toroidal flux; if we havent already
-        # avg_minor_rad = self.surf.get('rc(0,0)')/self.surf.aspect_ratio() # true avg minor radius
-        target_avg_minor_rad = major_radius / aspect_target  # target avg minor radius
+        target_avg_minor_rad: float = major_radius / aspect_target
         self.vmec.indata.phiedge = np.pi * (target_avg_minor_rad**2) * target_volavgB
         self.vmec.need_to_run_code = True
 
-        # self.vmec.run()
-        # print('aspect',self.vmec.aspect())
-        # print('volavgB',self.vmec.wout.volavgB)
-        # print('phiedge',self.vmec.indata.phiedge)
+        # Set other attributes
+        self.x0: np.ndarray = np.copy(self.surf.x)
+        self.dim_x: int = len(self.x0)
+        self.tracing_tol: float = tracing_tol
+        self.interpolant_degree: int = interpolant_degree
+        self.interpolant_level: int = interpolant_level
+        self.bri_mpol: int = bri_mpol
+        self.bri_ntor: int = bri_ntor
 
-        # variables
-        self.x0 = np.copy(self.surf.x)  # nominal starting point
-        self.dim_x = len(self.x0)  # dimension
+        # Initialize placeholders
+        self.x_field: np.ndarray = np.zeros(self.dim_x)
+        self.field: None | any = None
+        self.bri: None | any = None
 
-        # tracing params
-        self.tracing_tol = tracing_tol
-        self.interpolant_degree = interpolant_degree
-        self.interpolant_level = interpolant_level
-        self.bri_mpol = bri_mpol
-        self.bri_ntor = bri_ntor
-
-        # placeholders
-        self.x_field = np.zeros(self.dim_x)
-        self.field = None
-        self.bri = None
-
-        # Precompute and cache the default grid
-        self._cached_grid_params = (ns_B, ntheta_B, nzeta_B, smin, smax)
-        self._cached_grid = self._compute_grid(*self._cached_grid_params)
+        # Cache grid
+        self._cached_grid_params: tuple = (ns_B, ntheta_B, nzeta_B, smin, smax)
+        self._cached_grid: tuple = self._compute_grid(*self._cached_grid_params)
 
     def _compute_grid(self, ns, ntheta, nphi, smin, smax):
         s = np.linspace(smin, smax, ns)
