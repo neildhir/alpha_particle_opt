@@ -94,7 +94,7 @@ def f(x):
 
     x: array, vmec configuration variables
     """
-    # sample particle positions (uniformly in theta,phi not in space)
+    # sample particle positions (uniformly in theta, phi not in space)
     stz_inits, vpar_inits = tracer.sample_surface(n_particles, s_label)
 
     # ensure compatibility with C++ tracing
