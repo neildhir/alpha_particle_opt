@@ -7,7 +7,7 @@ from src.trace.trace_boozer import TraceBoozer
 
 import numpy as np
 from mpi4py import MPI
-from torch import tensor, Tensor, stack, zeros, ones, inf
+from torch import tensor, Tensor, inf
 
 # from sklearn.preprocessing import MinMaxScaler
 
@@ -123,7 +123,7 @@ def f(x):
     return res
 
 
-def compute_B_field_vmec(x: np.ndarray) -> np.ndarray:
+def compute_B_field_vmec(x: np.ndarray, verbose: bool = False) -> np.ndarray:
     """
     Use VMEC to compute the B field.
     """
@@ -132,15 +132,43 @@ def compute_B_field_vmec(x: np.ndarray) -> np.ndarray:
 
     # VMEC failure
     # TODO: @misha check this failure condition. It is ambigous, I changed it from if modB == [] but that is not a good condition since it will try to compare (numerical) modB against an empty list which is undefined. Check line 391 of tracer_boozer.py if there is a better way to assign the empty array, can be we np.empty(vec_len) instead? I don't want to change it myself in case there are downstream effects that I don't know about.
-    if not modB:
+    # if not modB:
+    #     return np.zeros(len_B_field_out)
+    all_zeros = not np.any(modB)
+    if all_zeros:
         return np.zeros(len_B_field_out)
 
     # print some stuff
-    if rank == 0:
-        print("B interval:", np.min(modB), np.max(modB))
+    if rank == 0 and verbose:
+        print("B-interval:", np.min(modB), np.max(modB))
         print("Mirror Ratio:", np.max(modB) / np.min(modB))
 
     return modB
+
+
+def get_B_field(x: np.ndarray, container: dict[float, float] = None) -> dict[np.ndarray, np.ndarray]:
+    """
+    Functions caches the B field values for a given x so that we don't have to recompute it.
+
+    Parameters
+    ----------
+    x : np.ndarray
+        Input
+    container : dict[float, float]
+        Container to store the B field values for a given x - if not given the B field will be computed and returned each time this function is called
+
+    Returns
+    -------
+    dict[np.ndarray, np.ndarray]
+        B field values for a given x
+    """
+
+    if container:
+        if x not in container:
+            container[x] = compute_B_field_vmec(x)
+        return container[x]
+    else:
+        return compute_B_field_vmec(x)
 
 
 def acqf_nonlinear_inequality_constraints() -> list[tuple[callable, bool]]:
@@ -155,29 +183,13 @@ def acqf_nonlinear_inequality_constraints() -> list[tuple[callable, bool]]:
     # XXX: we could have separate constraints per dimension
 
     def create_constraints():
-        B_field_cache = {}
-
-        def get_B_field(x: np.ndarray) -> dict[np.ndarray, np.ndarray]:
-            """
-            Functions caches the B field values for a given x so that we don't have to recompute it.
-
-            Parameters
-            ----------
-            x : np.ndarray
-                Input
-
-            Returns
-            -------
-            dict[np.ndarray, np.ndarray]
-                B field values for a given x
-            """
-
-            if x not in B_field_cache:
-                B_field_cache[x] = compute_B_field_vmec(x)
-            return B_field_cache[x]
-
-        B_diff_lower = lambda x: -(B_lb - get_B_field(x))  # Negated to conform to optimize_acqf docstring instructions
-        B_diff_upper = lambda x: -(get_B_field(x) - B_ub)  # Negated to conform to optimize_acqf docstring instructions
+        B_field_cache = {}  # Container to store already computed B field values
+        B_diff_lower = lambda x: -(
+            B_lb - get_B_field(x, B_field_cache)
+        )  # Negated to conform to optimize_acqf docstring instructions
+        B_diff_upper = lambda x: -(
+            get_B_field(x, B_field_cache) - B_ub
+        )  # Negated to conform to optimize_acqf docstring instructions
 
         return [(B_diff_lower, True), (B_diff_upper, True)]
 

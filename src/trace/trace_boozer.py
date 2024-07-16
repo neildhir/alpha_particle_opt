@@ -125,11 +125,11 @@ class TraceBoozer:
         phi = np.linspace(0, 2 * np.pi / self.surf.nfp, nphi)
         return s, theta, phi
 
-    def expand_x(self, max_mode):
+    def expand_x(self, max_mode: int) -> np.ndarray:
         """
         Expands the parameter space to the desired max mode.
 
-        return the current point in the higher dim space.
+        Returns the current point in the higher dimensional space.
         """
         # Define parameter space:
         self.surf.fix_all()
