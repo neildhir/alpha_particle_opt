@@ -12,4 +12,20 @@
         2. The gradient based optimisier requires us to provide a generator of samples from the feasible set of $\mathbf{w}$ we use simple rejection sampling or e.g. NUTS/other MCMC method.
     3. Get target value $y_{\text{new}}$ by evaluating the tracing class with $\mathbf{w}_{\text{new}}$
     4. Update $\mathcal{D} \leftarrow \mathcal{D} \cup \{(\mathbf{w}_{\text{new}}, y_{\text{new}})\}$
+    5. **QUESTION:** Presumably we need to re-rerun the tracing class `TracerBoozer` here, with the new Fourier coefficients, in order to get the updated version of the constraints, since $B(\mathbf{x}) \mid \mathbf{w}$.
+    6. $i \leftarrow i + 1$
 - End
+
+## Questions
+
+- What are the constraints a function of? $\mathbf{w}$ or $\mathbf{x}$?
+- Is `x0` in `tracing_example.py` the same as $\mathbf{w}$? Is it the random initial position of a particle? If not, and it is initial Fourier coefficients, then why are they not the same as those in the input file?
+
+## To-do
+
+- [ ] Update function arguments to reflect paper notation e.g. $\mathbf{w}$ instead of $\mathbf{x}$ in the objective function $\mathcal{J}(\cdot)$ as well as in constraint calc. (amongst other places)
+  - Assignee: @misha
+- [ ] Change vmec output 'settings' (?) so that it doesn't generate any files each time it is being called
+  - Assignee: @michael
+- [ ] Make class of the stuff in the `tracing_example.py` file
+  - Assignee: @neil

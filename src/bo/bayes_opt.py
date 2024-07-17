@@ -99,12 +99,3 @@ def optimize_acqf_and_get_new_point(
     new_obj = f(new_x.numpy().flatten())  # This is cumbersome, re-write
 
     return new_x, new_obj
-
-
-def initial_candidate_generator(n: int, **kwargs) -> Tensor:
-    # Generate n initial conditions that satisfy your constraints
-    # This is a simple example; you'll need to adapt it to your specific constraints
-    samples = torch.rand(n, d)  # d is the dimension of your search space
-    while not all(constraint(samples) <= 0):
-        samples = torch.rand(n, d)
-    return samples

@@ -197,7 +197,7 @@ def acqf_nonlinear_inequality_constraints() -> list[tuple[callable, bool]]:
     return create_constraints()
 
 
-def build_BO_params() -> tuple[Tensor, Tensor, Tensor, list[tuple[callable, bool]]]:
+def get_init_BO_params() -> tuple[Tensor, Tensor, Tensor, list[tuple[callable, bool]]]:
 
     assert d == len(x0)  # Dimension of the input space (# of Fourier coefficients)
 

@@ -310,7 +310,7 @@ class TraceBoozer:
 
         # Construct radial interpolant of magnetic field
         bri = BoozerRadialInterpolant(
-            self.vmec, order=self.interpolant_degree, mpol=self.bri_mpol, ntor=self.bri_ntor, enforce_vacuum=True
+            equil=self.vmec, order=self.interpolant_degree, mpol=self.bri_mpol, ntor=self.bri_ntor, enforce_vacuum=True
         )
 
         # Construct 3D interpolation
