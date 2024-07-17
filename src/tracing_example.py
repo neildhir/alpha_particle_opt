@@ -80,7 +80,7 @@ tracer = TraceBoozer(
 # sync seeds across MPI ranks
 tracer.sync_seeds()
 
-# get the optimization variables
+# get the optimization variables [Fourier coefficients]
 x0 = tracer.x0
 
 
@@ -92,7 +92,8 @@ def f(x):
     expected energy loss
       f = E[3.5*np.exp(-2*c_times/tmax)]
 
-    x: array, vmec configuration variables
+    x: array
+        vmec configuration variables [Fourier coefficients]
     """
     # sample particle positions (uniformly in theta, phi not in space)
     stz_inits, vpar_inits = tracer.sample_surface(n_particles, s_label)

@@ -6,7 +6,7 @@ from botorch.acquisition import ExpectedImprovement
 import time
 
 from tracing_example import f, build_BO_params
-from utils.bayes_opt import build_surrogate_model, optimize_acqf_and_get_new_point
+from bo.bayes_opt import build_surrogate_model, optimize_acqf_and_get_new_point
 
 SMOKE_TEST = environ.get("SMOKE_TEST")  # TODO: finish this
 
