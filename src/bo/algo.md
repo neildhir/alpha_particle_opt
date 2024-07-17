@@ -17,7 +17,7 @@
 
 ## To-do
 
-- [] Write a pseudo-sample for feasible Fourier coefficients: just add some noise to the initial Fourier coefficients and treat these samples as if they are from VMEC (i.o.t. test the BO loop)
+- [] Write a pseudo-sampler for feasible Fourier coefficients: just add some noise to the initial Fourier coefficients and treat these samples as if they are from VMEC (i.o.t. test the BO loop)
   - Assignee: @neil
 - [ ] Update function arguments to reflect paper notation e.g. $\mathbf{w}$ instead of $\mathbf{x}$ in the objective function $\mathcal{J}(\cdot)$ as well as in constraint calc. (amongst other places)
   - Assignee: @misha
