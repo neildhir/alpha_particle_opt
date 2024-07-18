@@ -5,7 +5,7 @@ from botorch.fit import fit_gpytorch_mll
 from botorch.acquisition import ExpectedImprovement
 import time
 
-from tracing_example import f, get_init_BO_params
+from tracing_example import StellaratorDesign
 from bo.bayes_opt import build_surrogate_model, optimize_acqf_and_get_new_point
 
 SMOKE_TEST = environ.get("SMOKE_TEST")  # TODO: finish this
@@ -17,7 +17,7 @@ def run(
     bounds: Tensor,
     nonlinear_inequality_constraints: list[tuple[callable, bool]],
     SMOKE_TEST: bool,
-    iterations: int = 5,
+    iterations: int = 50,
     verbose: bool = True,
 ) -> None:
     """
@@ -78,11 +78,13 @@ def run(
     # TODO: save results module
 
 
-train_X, train_Y, bounds, constraints = get_init_BO_params()
-SMOKE_TEST = True  # TODO: remove this eventually
-run(train_X, train_Y, bounds, constraints, SMOKE_TEST)
-
 if __name__ == "__main__":
-    train_X, train_Y, bounds, constraints = get_init_BO_params()
+    vmec_input_files = [
+        "./src/vmec_input_files/input.nfp4_QH_cold_high_res",
+        "./src/vmec_input_files/input.nfp4_QH_cold_high_res_mirror_feasible",
+        "./src/vmec_input_files/input.nfp4_QH_warm_start_high_res",
+    ]
+    design = StellaratorDesign()
+    train_X, train_Y, bounds, constraints = design.get_init_BO_params(vmec_input_files)
     SMOKE_TEST = True
     run(train_X, train_Y, bounds, constraints, SMOKE_TEST)

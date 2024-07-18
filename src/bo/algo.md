@@ -17,7 +17,7 @@
 
 ## To-do
 
-- [ ] Use Fourier coefficients from all `nfp4` files and use these as the initial training set.
+- [x] Use Fourier coefficients from all `nfp4` files and use these as the initial training set.
   - Assignee: @neil
 - [x] Write a pseudo-sampler for feasible Fourier coefficients: just add some noise to the initial Fourier coefficients and treat these samples as if they are from VMEC (i.o.t. test the BO loop)
   - Assignee: @neil
