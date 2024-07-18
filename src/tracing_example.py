@@ -1,260 +1,271 @@
 import os
 import sys
 
-sys.path.insert(0, os.getcwd())  # Manually add current directory (src in this case) to pythonpath
+sys.path.insert(0, os.getcwd())
+from mpi4py import MPI
+import numpy as np
+from torch import Tensor, tensor, inf, cat
 
 from src.trace.trace_boozer import TraceBoozer
 
-import numpy as np
-from mpi4py import MPI
-from torch import tensor, Tensor, inf
 
-# from sklearn.preprocessing import MinMaxScaler
+class StellaratorDesign:
+    def __init__(self):
 
+        # MPI stuff
+        self.comm = MPI.COMM_WORLD
+        self.size = self.comm.Get_size()
+        self.rank = self.comm.Get_rank()
 
-# MPI stuff
-comm = MPI.COMM_WORLD
-size = comm.Get_size()
-rank = comm.Get_rank()
+        # Number of Fourier modes for optimization
+        self.max_mode = 1
+        self.d = 4 * self.max_mode**2 + 4 * self.max_mode
 
-# Choose an initial configuration
-vmec_input_file = "/Users/z004mktz/Code/fusion/alpha_particle_opt/src/vmec_input_files/input.nfp4_QH_cold_high_res"  # Used the cold start (input.nfp4_QH_cold_high_res) of this file instead of the default warm start (input.nfp4_QH_warm_start_high_res)
+        # Target aspect ratio (ARIES-CS)
+        self.aspect_target = 7.0
 
-# number of Fourier modes for optimization
-max_mode = 1
-d = 4 * max_mode**2 + 4 * max_mode
+        # Fixed major radius (ARIES-CS size)
+        self.major_radius = 1.7 * self.aspect_target
 
-# target aspect ratio (ARIES-CS)
-aspect_target = 7.0
+        # Volume average field strength
+        self.target_volavgB = 1.0  # tesla
 
-# fixed major radius (ARIES-CS size)
-major_radius = 1.7 * aspect_target
+        # Tracing parameters
+        self.s_label = 0.25  # surface label
+        self.tmax = 1e-4  # max tracing time
+        self.n_particles = 100  # number of particles
 
-# volume average field strength
-target_volavgB = 1.0  # tesla
+        # Tracing fidelity
+        self.tracing_tol = 1e-8
+        self.interpolant_degree = 3
+        self.interpolant_level = 8
+        self.bri_mpol = 8
+        self.bri_ntor = 8
 
-# tracing parameters
-s_label = 0.25  # surface label
-tmax = 1e-4  # max tracing time
-n_particles = 100  # number of particles
+        # Output constraints on mirror ratio
+        self.ns_B = 8  # maxB should be on boundary (so we could always just sample the boundary...)
+        self.ntheta_B = 16
+        self.nzeta_B = 16
+        self.smin = 0.02
+        self.smax = 1.0
+        self.len_B_field_out = self.ns_B * self.ntheta_B * self.nzeta_B
+        self.mirror_target = 1.35
+        self.eps_B = (self.mirror_target - 1.0) / (self.mirror_target + 1.0)
+        self.B_ub = self.target_volavgB * (1 + self.eps_B) * np.ones(self.len_B_field_out)  # upper bound, eq. 14
+        self.B_lb = self.target_volavgB * (1 - self.eps_B) * np.ones(self.len_B_field_out)  # lower bound, eq. 14
 
-# tracing fidelity
-tracing_tol = 1e-8
-interpolant_degree = 3
-interpolant_level = 8
-bri_mpol = 8
-bri_ntor = 8
+    def build_tracer(self, vmec_input_file: str) -> TraceBoozer:
+        return TraceBoozer(
+            vmec_input_file,
+            n_partitions=1,  # number of partitions for vmec (always use 1)
+            max_mode=self.max_mode,  # maximum fourier modes for boundary
+            major_radius=self.major_radius,  # major radius
+            aspect_target=self.aspect_target,  # aspect ratio
+            target_volavgB=self.target_volavgB,
+            tracing_tol=self.tracing_tol,
+            interpolant_degree=self.interpolant_degree,
+            interpolant_level=self.interpolant_level,
+            bri_mpol=self.bri_mpol,
+            bri_ntor=self.bri_ntor,
+            ns_B=self.ns_B,
+            ntheta_B=self.ntheta_B,
+            nzeta_B=self.nzeta_B,
+            smin=self.smin,
+            smax=self.smax,
+        )
 
-# Output constraints on mirror ratio
+    @staticmethod
+    def sample_fake_Fourier_coefficients(x: np.ndarray) -> np.ndarray:
+        """
+        Sample fake Fourier coefficients for testing purposes.
 
-ns_B = 8  # maxB should be on boundary (so we could always just sample the boundary...)
-ntheta_B = 16
-nzeta_B = 16
-smin = 0.02
-smax = 1.0
-len_B_field_out = ns_B * ntheta_B * nzeta_B
-mirror_target = 1.35
-eps_B = (mirror_target - 1.0) / (mirror_target + 1.0)
-B_ub = target_volavgB * (1 + eps_B) * np.ones(len_B_field_out)  # upper bound, eq. 14
-B_lb = target_volavgB * (1 - eps_B) * np.ones(len_B_field_out)  # lower bound, eq. 14
+        Parameters
+        ----------
+        x0 : np.ndarray
+            An initial (real) Fourier coefficient configuration
 
-tracer = TraceBoozer(
-    vmec_input_file,  # vmec input file
-    n_partitions=1,  # number of partitions for vmec (always use 1)
-    max_mode=max_mode,  # maximum fourier modes for boundary
-    major_radius=major_radius,  # major radius
-    aspect_target=aspect_target,  # aspect ratio
-    target_volavgB=target_volavgB,
-    tracing_tol=tracing_tol,
-    interpolant_degree=interpolant_degree,
-    interpolant_level=interpolant_level,
-    bri_mpol=bri_mpol,
-    bri_ntor=bri_ntor,
-    ns_B=ns_B,
-    ntheta_B=ntheta_B,
-    nzeta_B=nzeta_B,
-    smin=smin,
-    smax=smax,
-)
+        Returns
+        -------
+        np.ndarray
+            A corrupted version of x0 which simulates a new Fourier coefficient sample
+        """
+        noise = 0.1 * np.random.normal(0, 1, x.shape)
+        return x + noise  # New Fourier coefficient 'sample'
 
-# sync seeds across MPI ranks
-tracer.sync_seeds()
+    def f(self, x: np.ndarray) -> float:
+        """
+        Objective for minimization: expected energy loss f = E[3.5*np.exp(-2*c_times/tmax)]
 
-# get the optimization variables [Fourier coefficients]
-x0 = tracer.x0
+        Parameters
+        ----------
+        x : np.ndarray
+            vmec configuration variables [Fourier coefficients]
 
+        Returns
+        -------
+        float
+            Expected energy loss for the given configuration
+        """
+        # Sample particle positions (uniformly in theta, phi not in space)
+        stz_inits, vpar_inits = self.tracer.sample_surface(self.n_particles, self.s_label)
 
-def sample_fake_Fourier_coefficients() -> np.ndarray:
-    """
-    Sample fake Fourier coefficients for testing purposes.
-    """
-    noise = 0.1 * np.random.normal(0, 1, x0.shape)
-    return x0 + noise  # New Fourier coefficient 'sample'
+        # Ensure compatibility with C++ tracing
+        stz_inits = np.ascontiguousarray(stz_inits)
+        vpar_inits = np.ascontiguousarray(vpar_inits)
 
+        # Compute confinement times (heavy)
+        c_times = self.tracer.compute_confinement_times(x, stz_inits, vpar_inits, self.tmax)
 
-# Objective
-def f(x: np.ndarray) -> float:
-    """
-    Objective for minimization: expected energy loss f = E[3.5*np.exp(-2*c_times/tmax)]
+        if np.any(~np.isfinite(c_times)):
+            # Vmec failed here; return worst possible value
+            c_times = np.zeros(len(vpar_inits))
 
-    Parameters
-    ----------
-    x : np.ndarray
-        vmec configuration variables [Fourier coefficients]
+        # Energy retained by particle
+        feat = 3.5 * np.exp(-2 * c_times / self.tmax)
 
-    Returns
-    -------
-    float
-        Expected energy loss for the given configuration
-    """
-    # sample particle positions (uniformly in theta, phi not in space)
-    stz_inits, vpar_inits = tracer.sample_surface(n_particles, s_label)
+        # Sample average
+        res = np.mean(feat)
+        loss_frac = np.mean(c_times < self.tmax)
 
-    # ensure compatibility with C++ tracing
-    stz_inits = np.ascontiguousarray(stz_inits)
-    vpar_inits = np.ascontiguousarray(vpar_inits)
+        # Print with MPI
+        if self.rank == 0:
+            print("obj:", res, "P(loss):", loss_frac)
+        sys.stdout.flush()
 
-    # compute confinement times (heavy)
-    c_times = tracer.compute_confinement_times(x, stz_inits, vpar_inits, tmax)
+        return res
 
-    if np.any(~np.isfinite(c_times)):
-        # vmec failed here; return worst possible value
-        c_times = np.zeros(len(vpar_inits))
+    def compute_B_field_vmec(self, x: np.ndarray, verbose: bool = False) -> np.ndarray:
+        """
+        Use VMEC to compute the B field.
+        """
+        # Compute modB on a grid
+        modB = self.tracer.compute_modB_vmec(
+            x, ns=self.ns_B, ntheta=self.ntheta_B, nphi=self.nzeta_B, smin=self.smin, smax=self.smax
+        )
 
-    # energy retained by particle
-    feat = 3.5 * np.exp(-2 * c_times / tmax)
+        # VMEC failure
+        # TODO: @misha check this failure condition. It is ambigous, I changed it from if modB == [] but that is not a good condition since it will try to compare (numerical) modB against an empty list which is undefined. Check line 391 of tracer_boozer.py if there is a better way to assign the empty array, can be we np.empty(vec_len) instead? I don't want to change it myself in case there are downstream effects that I don't know about.
+        # if not modB:
+        #     return np.zeros(self.len_B_field_out)
+        all_zeros = not np.any(modB)
+        if all_zeros:
+            return np.zeros(self.len_B_field_out)
 
-    # sample average
-    res = np.mean(feat)
-    loss_frac = np.mean(c_times < tmax)
+        # print some stuff
+        if self.rank == 0 and verbose:
+            print("B-interval:", np.min(modB), np.max(modB))
+            print("Mirror Ratio:", np.max(modB) / np.min(modB))
 
-    # print with MPI
-    if rank == 0:
-        print("obj:", res, "P(loss):", loss_frac)
-    sys.stdout.flush()
+        return modB
 
-    return res
+    def get_B_field(self, x: np.ndarray, container: dict[float, float] = None) -> dict[np.ndarray, np.ndarray]:
+        """
+        Functions caches the B field values for a given x so that we don't have to recompute it.
 
+        Parameters
+        ----------
+        x : np.ndarray
+            Input
+        container : dict[float, float]
+            Container to store the B field values for a given x - if not given the B field will be computed and returned each time this function is called
 
-def compute_B_field_vmec(x: np.ndarray, verbose: bool = False) -> np.ndarray:
-    """
-    Use VMEC to compute the B field.
-    """
-    # Compute modB on a grid
-    modB = tracer.compute_modB_vmec(x, ns=ns_B, ntheta=ntheta_B, nphi=nzeta_B, smin=smin, smax=smax)
+        Returns
+        -------
+        dict[np.ndarray, np.ndarray]
+            B field values for a given x
+        """
 
-    # VMEC failure
-    # TODO: @misha check this failure condition. It is ambigous, I changed it from if modB == [] but that is not a good condition since it will try to compare (numerical) modB against an empty list which is undefined. Check line 391 of tracer_boozer.py if there is a better way to assign the empty array, can be we np.empty(vec_len) instead? I don't want to change it myself in case there are downstream effects that I don't know about.
-    # if not modB:
-    #     return np.zeros(len_B_field_out)
-    all_zeros = not np.any(modB)
-    if all_zeros:
-        return np.zeros(len_B_field_out)
+        if container:
+            if x not in container:
+                container[x] = self.compute_B_field_vmec(x)
+            return container[x]
+        else:
+            return self.compute_B_field_vmec(x)
 
-    # print some stuff
-    if rank == 0 and verbose:
-        print("B-interval:", np.min(modB), np.max(modB))
-        print("Mirror Ratio:", np.max(modB) / np.min(modB))
+    def acqf_nonlinear_inequality_constraints(self) -> list[tuple[callable, bool]]:
+        """
+        This function returns the nonlinear inequality constraints for the acquisition function. Nonlinear inequality constraints: equation (13) and (14) of [1], section 4.2.
 
-    return modB
+        References
+        ----------
+        [1] Bindel, David, Matt Landreman, and Misha Padidar. "Direct optimization of fast-ion confinement in stellarators." Plasma Physics and Controlled Fusion 65.6 (2023): 065012.
+        """
 
+        # XXX: we could have separate constraints per dimension
 
-def get_B_field(x: np.ndarray, container: dict[float, float] = None) -> dict[np.ndarray, np.ndarray]:
-    """
-    Functions caches the B field values for a given x so that we don't have to recompute it.
+        def create_constraints():
+            B_field_cache = {}  # Container to store already computed B field values
+            B_diff_lower = lambda x: -(
+                self.B_lb - self.get_B_field(x, B_field_cache)
+            )  # Negated to conform to optimize_acqf docstring instructions
+            B_diff_upper = lambda x: -(
+                self.get_B_field(x, B_field_cache) - self.B_ub
+            )  # Negated to conform to optimize_acqf docstring instructions
 
-    Parameters
-    ----------
-    x : np.ndarray
-        Input
-    container : dict[float, float]
-        Container to store the B field values for a given x - if not given the B field will be computed and returned each time this function is called
+            return [(B_diff_lower, True), (B_diff_upper, True)]
 
-    Returns
-    -------
-    dict[np.ndarray, np.ndarray]
-        B field values for a given x
-    """
+        return create_constraints()
 
-    if container:
-        if x not in container:
-            container[x] = compute_B_field_vmec(x)
-        return container[x]
-    else:
-        return compute_B_field_vmec(x)
+    def get_init_BO_params(
+        self, input_files: str | list[str]
+    ) -> tuple[Tensor, Tensor, Tensor, list[tuple[callable, bool]]]:
+        """
+        Function builds the initial training data for Bayesian optimization as well as the bounds and constraints, given a list of input files or a single input file.
 
+        Parameters
+        ----------
+        input_files : str | list[str]
+            Input files for the VMEC configuration
 
-def acqf_nonlinear_inequality_constraints() -> list[tuple[callable, bool]]:
-    """
-    This function returns the nonlinear inequality constraints for the acquisition function. Nonlinear inequality constraints: equation (13) and (14) of [1], section 4.2.
+        Returns
+        -------
+        tuple[Tensor, Tensor, Tensor, list[tuple[callable, bool]]]
+            Training data, training labels, bounds, and constraints
+        """
 
-    References
-    ----------
-    [1] Bindel, David, Matt Landreman, and Misha Padidar. "Direct optimization of fast-ion confinement in stellarators." Plasma Physics and Controlled Fusion 65.6 (2023): 065012.
-    """
+        # TODO: the GPR model requires us to scale the input features to the unit cube and standardize the output. We should do this here.
 
-    # XXX: we could have separate constraints per dimension
+        if isinstance(input_files, str):
+            # Build tracer for this input file
+            self.tracer = self.build_tracer(input_files)
+            # Sync seeds across MPI ranks
+            self.tracer.sync_seeds()
 
-    def create_constraints():
-        B_field_cache = {}  # Container to store already computed B field values
-        B_diff_lower = lambda x: -(
-            B_lb - get_B_field(x, B_field_cache)
-        )  # Negated to conform to optimize_acqf docstring instructions
-        B_diff_upper = lambda x: -(
-            get_B_field(x, B_field_cache) - B_ub
-        )  # Negated to conform to optimize_acqf docstring instructions
+            x0 = self.tracer.x0
+            assert self.d == len(x0)  # Dimension of the input space (# of Fourier coefficients)
+            train_X = tensor(x0).view(1, -1)  # 1 x d
+            y0 = self.f(x0)
+            train_Y = tensor([y0]).unsqueeze(-1)
+        else:
+            assert isinstance(input_files, list)
+            train_X = None
+            train_Y = None
+            for file in input_files:
+                # Build tracer for each input file
+                self.tracer = self.build_tracer(file)
+                x0 = self.tracer.x0
+                assert self.d == len(x0)  # Dimension of the input space (# of Fourier coefficients)
+                if train_X is None:
+                    train_X = tensor(x0).view(1, -1)  # 1 x d
+                else:
+                    train_X = cat((train_X, tensor(x0).view(1, -1)), dim=0)
+                y0 = self.f(x0)
+                if train_Y is None:
+                    train_Y = tensor([y0]).unsqueeze(-1)
+                else:
+                    train_Y = cat((train_Y, tensor([y0]).unsqueeze(-1)), dim=0)
 
-        return [(B_diff_lower, True), (B_diff_upper, True)]
+        assert self.d == train_X.shape[1]  # Dimension of the input space (# of Fourier coefficients)
 
-    return create_constraints()
+        # The upper and lower bounds and specified with inf because we have non-linear inequality constraints -- see docstring for optimize_acqf
+        bounds = tensor([[-inf] * self.d, [inf] * self.d])  # TODO: fix this so that we have finite bounds
+        constraints = self.acqf_nonlinear_inequality_constraints()
 
-
-def get_init_BO_params() -> tuple[Tensor, Tensor, Tensor, list[tuple[callable, bool]]]:
-
-    assert d == len(x0)  # Dimension of the input space (# of Fourier coefficients)
-
-    # Features
-
-    # Create the scaler object
-    # scaler = MinMaxScaler(feature_range=(0, 1))
-    # Scale the values to the unit cube
-    # scaled_values = scaler.fit_transform(x0.reshape(-1, 1))
-    train_X = tensor(x0).view(1, -1)  # 1 x d
-
-    # Targets
-
-    # Standardise the output if vector valued
-    # train_y0 = (y0 - y0.mean()) / y0.std()
-    y0 = f(x0)
-    train_Y = tensor([y0]).unsqueeze(-1)
-
-    # Bounds and constraints
-
-    # The upper and lower bounds and specified with inf because we have non-linear inequality constraints -- see docstring for optimize_acqf
-    bounds = tensor([[-inf] * d, [inf] * d])
-    constraints = acqf_nonlinear_inequality_constraints()
-
-    return train_X, train_Y, bounds, constraints
-
-
-def compute_B_field(x: np.ndarray) -> np.ndarray:
-
-    raise DeprecationWarning("This function is deprecated. Use compute_B_field_vmec instead.")
-
-    # Compute modB on a grid
-
-    field, bri = tracer.compute_boozer_field(x)
-    if field is None:
-        return np.zeros(len_B_field_out)
-    modB = tracer.compute_modB(field, bri, ns=ns_B, ntheta=ntheta_B, nphi=nzeta_B)
-    if rank == 0:
-        print("B interval:", np.min(modB), np.max(modB))
-        print("Mirror Ratio:", np.max(modB) / np.min(modB))
-
-    return modB
+        return train_X, train_Y, bounds, constraints
 
 
 if __name__ == "__main__":
-    # Test new B-field computation which only uses vmec
-    out = compute_B_field_vmec(x0)
+    test = StellaratorDesign()
+    vmec_input_file = "/Users/z004mktz/Code/fusion/alpha_particle_opt/src/vmec_input_files/input.nfp4_QH_cold_high_res"  # Used the cold start (input.nfp4_QH_cold_high_res) of this file instead of the default warm start (input.nfp4_QH_warm_start_high_res)
+    out = test.get_init_BO_params(vmec_input_file)
     print(out)
