@@ -84,16 +84,28 @@ tracer.sync_seeds()
 x0 = tracer.x0
 
 
-# Objective
-def f(x):
+def sample_fake_Fourier_coefficients() -> np.ndarray:
     """
-    objective for minimization:
+    Sample fake Fourier coefficients for testing purposes.
+    """
+    noise = 0.1 * np.random.normal(0, 1, x0.shape)
+    return x0 + noise  # New Fourier coefficient 'sample'
 
-    expected energy loss
-      f = E[3.5*np.exp(-2*c_times/tmax)]
 
-    x: array
+# Objective
+def f(x: np.ndarray) -> float:
+    """
+    Objective for minimization: expected energy loss f = E[3.5*np.exp(-2*c_times/tmax)]
+
+    Parameters
+    ----------
+    x : np.ndarray
         vmec configuration variables [Fourier coefficients]
+
+    Returns
+    -------
+    float
+        Expected energy loss for the given configuration
     """
     # sample particle positions (uniformly in theta, phi not in space)
     stz_inits, vpar_inits = tracer.sample_surface(n_particles, s_label)

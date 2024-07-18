@@ -17,13 +17,15 @@
 
 ## To-do
 
-- [] Write a pseudo-sampler for feasible Fourier coefficients: just add some noise to the initial Fourier coefficients and treat these samples as if they are from VMEC (i.o.t. test the BO loop)
+- [ ] Use Fourier coefficients from all `nfp4` files and use these as the initial training set.
+  - Assignee: @neil
+- [x] Write a pseudo-sampler for feasible Fourier coefficients: just add some noise to the initial Fourier coefficients and treat these samples as if they are from VMEC (i.o.t. test the BO loop)
   - Assignee: @neil
 - [ ] Update function arguments to reflect paper notation e.g. $\mathbf{w}$ instead of $\mathbf{x}$ in the objective function $\mathcal{J}(\cdot)$ as well as in constraint calc. (amongst other places)
   - Assignee: @misha
 - [ ] Box constraints
   - Assignee: @misha & @neil
 - [ ] Change vmec output 'settings' (?) so that it doesn't generate any files each time it is being called
-  - Assignee: @michael
+  - Assignee: @michael & @misha
 - [ ] Make class of the stuff in the `tracing_example.py` file
   - Assignee: @neil
