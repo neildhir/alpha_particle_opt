@@ -40,6 +40,7 @@ def build_surrogate_model(
 
 def optimize_acqf_and_get_new_point(
     f: callable,
+    ic_generator: callabe,
     acq_func: ExpectedImprovement,
     bounds: Tensor,
     nonlinear_inequality_constraints: list[tuple[callable, bool]],
@@ -77,16 +78,11 @@ def optimize_acqf_and_get_new_point(
     RAW_SAMPLES = 512 if not SMOKE_TEST else 32
 
     stopping_criterion = None  # TODO: implement
-    # acqf = qExpectedImprovement(model=m1, best_f=0.0)
-    # opt_inputs = OptimizeAcqfInputs(
-    # acq_function=acqf, bounds=bounds, q=1, num_restarts=1, **kwargs
-    # )
-    # ic_generator = opt_inputs.get_ic_generator()
 
     # Initial condition (IC) generation is a fairly unsupported feature in BoTorch (at the time or writing). For details see: https://github.com/pytorch/botorch/issues/1572
 
     candidates, _ = optimize_acqf(
-        ic_generator=None,  # TODO: have to provide this
+        ic_generator=ic_generator,  # TODO: make sure to switch out dummy sampler
         acq_function=acq_func,
         bounds=bounds,
         nonlinear_inequality_constraints=nonlinear_inequality_constraints,
@@ -94,7 +90,8 @@ def optimize_acqf_and_get_new_point(
         raw_samples=RAW_SAMPLES,  # XXX: perhaps reduce a spot
         q=1,  # Explore methods which allow q > 1
     )
-    # observe new values
+
+    # Observe new values
     new_x = candidates.detach()  # Detach to avoid gradient updates
     new_obj = f(new_x.numpy().flatten())  # This is cumbersome, re-write
 

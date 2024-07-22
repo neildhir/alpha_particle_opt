@@ -12,6 +12,8 @@ SMOKE_TEST = environ.get("SMOKE_TEST")  # TODO: finish this
 
 
 def run(
+    f: callable,
+    ic_generator: callable,
     train_X: Tensor,
     train_Y: Tensor,
     bounds: Tensor,
@@ -25,6 +27,8 @@ def run(
 
     Parameters
     ----------
+    f : callable,
+        The true objective function
     train_X : Tensor
         Input features (training data, Fourier coefficients)
     train_Y : Tensor
@@ -41,9 +45,7 @@ def run(
 
     # Initialize the model with available training data
     mll, model = build_surrogate_model(train_X, train_Y)
-
-    iterations = iterations if not SMOKE_TEST else 4
-    for i in range(iterations):
+    for i in range(iterations if not SMOKE_TEST else 4):
 
         t0 = time.monotonic()
 
@@ -54,14 +56,15 @@ def run(
         ei = ExpectedImprovement(model, best_f=train_Y.min(), maximize=False)
 
         # Optimise and get new observation
-        # TODO: add stoppping criterion
-        new_x, new_f = optimize_acqf_and_get_new_point(f, ei, bounds, nonlinear_inequality_constraints, SMOKE_TEST)
+        new_x, new_f = optimize_acqf_and_get_new_point(
+            f, ei, bounds, nonlinear_inequality_constraints, SMOKE_TEST
+        )  # TODO: add stoppping criterion
 
         # Update training points
         train_X = vstack([train_X, new_x])
         train_Y = vstack([train_Y, new_f])
 
-        # Reinitialize the model so that it is ready for fitting on next iteration
+        # Re-build model with new data, ready for fitting on next iteration
         mll, model = build_surrogate_model(train_X, train_Y)  # TODO: with state-dict here?
 
         t1 = time.monotonic()
@@ -80,11 +83,13 @@ def run(
 
 if __name__ == "__main__":
     vmec_input_files = [
-        "./src/vmec_input_files/input.nfp4_QH_cold_high_res",
         "./src/vmec_input_files/input.nfp4_QH_cold_high_res_mirror_feasible",
         "./src/vmec_input_files/input.nfp4_QH_warm_start_high_res",
+        "./src/vmec_input_files/input.nfp4_QH_cold_high_res",
     ]
     design = StellaratorDesign()
     train_X, train_Y, bounds, constraints = design.get_init_BO_params(vmec_input_files)
     SMOKE_TEST = True
-    run(train_X, train_Y, bounds, constraints, SMOKE_TEST)
+
+    # Optimise
+    run(design.f, design.sample_fake_Fourier_coefficients, train_X, train_Y, bounds, constraints, SMOKE_TEST)

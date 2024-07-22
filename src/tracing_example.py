@@ -193,18 +193,15 @@ class StellaratorDesign:
 
         # XXX: we could have separate constraints per dimension
 
-        def create_constraints():
-            B_field_cache = {}  # Container to store already computed B field values
-            B_diff_lower = lambda x: -(
-                self.B_lb - self.get_B_field(x, B_field_cache)
-            )  # Negated to conform to optimize_acqf docstring instructions
-            B_diff_upper = lambda x: -(
-                self.get_B_field(x, B_field_cache) - self.B_ub
-            )  # Negated to conform to optimize_acqf docstring instructions
+        B_field_cache = {}  # Container to store already computed B field values
+        B_diff_lower = lambda x: -(
+            self.B_lb - self.get_B_field(x, B_field_cache)
+        )  # Negated to conform to optimize_acqf docstring instructions
+        B_diff_upper = lambda x: -(
+            self.get_B_field(x, B_field_cache) - self.B_ub
+        )  # Negated to conform to optimize_acqf docstring instructions
 
-            return [(B_diff_lower, True), (B_diff_upper, True)]
-
-        return create_constraints()
+        return [(B_diff_lower, True), (B_diff_upper, True)]
 
     def get_init_BO_params(
         self, input_files: str | list[str]
@@ -236,6 +233,7 @@ class StellaratorDesign:
             train_X = tensor(x0).view(1, -1)  # 1 x d
             y0 = self.f(x0)
             train_Y = tensor([y0]).unsqueeze(-1)
+
         else:
             assert isinstance(input_files, list)
             train_X = None
@@ -243,17 +241,23 @@ class StellaratorDesign:
             for file in input_files:
                 # Build tracer for each input file
                 self.tracer = self.build_tracer(file)
+
+                # Features
                 x0 = self.tracer.x0
                 assert self.d == len(x0)  # Dimension of the input space (# of Fourier coefficients)
                 if train_X is None:
                     train_X = tensor(x0).view(1, -1)  # 1 x d
                 else:
                     train_X = cat((train_X, tensor(x0).view(1, -1)), dim=0)
+
+                # Target
                 y0 = self.f(x0)
                 if train_Y is None:
                     train_Y = tensor([y0]).unsqueeze(-1)
                 else:
                     train_Y = cat((train_Y, tensor([y0]).unsqueeze(-1)), dim=0)
+
+        # TODO, fix InputDataWarning: Input data is not standardized (mean = tensor([2.3368], dtype=torch.float64), std = tensor([0.9414], dtype=torch.float64)). Please consider scaling the input to zero mean and unit variance.
 
         assert self.d == train_X.shape[1]  # Dimension of the input space (# of Fourier coefficients)
 
@@ -267,5 +271,9 @@ class StellaratorDesign:
 if __name__ == "__main__":
     test = StellaratorDesign()
     vmec_input_file = "/Users/z004mktz/Code/fusion/alpha_particle_opt/src/vmec_input_files/input.nfp4_QH_cold_high_res"  # Used the cold start (input.nfp4_QH_cold_high_res) of this file instead of the default warm start (input.nfp4_QH_warm_start_high_res)
-    out = test.get_init_BO_params(vmec_input_file)
-    print(out)
+    vmec_input_file = [
+        "./src/vmec_input_files/input.nfp4_QH_cold_high_res",
+        "./src/vmec_input_files/input.nfp4_QH_cold_high_res_mirror_feasible",
+        "./src/vmec_input_files/input.nfp4_QH_warm_start_high_res",
+    ]
+    train_X, train_Y, bounds, constraints = test.get_init_BO_params(vmec_input_file)
