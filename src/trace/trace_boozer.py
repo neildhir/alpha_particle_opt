@@ -348,7 +348,9 @@ class TraceBoozer:
         """
         Compute |B| on a tensor product grid VMEC coordinates, (s, theta, phi).
 
-        # TODO: @misha, can you document why we re-wrote this function just for future reference, my mind is already starting to forget why.
+        This function provides a faster way of computing |B| than the compute_modB function.
+        |B| is directly computed from the VMEC output in VMEC coordinates. Since this function
+        does not rely on BoozXForm, it is much faster than the compute_modB function.
 
         Parameters
         ----------
@@ -377,7 +379,7 @@ class TraceBoozer:
             self.vmec.run()
         except:
             # VMEC failure!
-            return []
+            return np.array([])
 
         # Check if we can use the cached grid
         if (ns, ntheta, nphi, smin, smax) == self._cached_grid_params:
@@ -388,13 +390,12 @@ class TraceBoozer:
             self._cached_grid_params = (ns, ntheta, nphi, smin, smax)
             s, theta, phi = self._cached_grid
 
-        # potentially run vmec and compute the geometric quantites
-        # TODO: @misha why does it say potentially run vmec?
+        # run vmec and compute the geometric quantites (VMEC may fail)
         data = vmec_compute_geometry(self.vmec, s, theta, phi)  # 3d array
 
         # return a 1d array
         modB = data.modB.flatten()
-        return np.copy(modB)  # TODO: @misha, why are we copying this?
+        return modB
 
     def compute_mu(self, field, bri, stz_inits, vpar_inits):
         """
@@ -500,7 +501,14 @@ if __name__ == "__main__":
         bri_mpol=8,
         bri_ntor=8,
     )
+
+    # get the initial fourier variables
     x0 = tracer.x0
+
+    # test modB function
+    modB = tracer.compute_modB_vmec(x0)
+    print("")
+    print('modB', modB)
 
     tmax = 1e-4
     n_particles = 10

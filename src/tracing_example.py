@@ -136,7 +136,11 @@ class StellaratorDesign:
 
     def compute_B_field_vmec(self, x: np.ndarray, verbose: bool = False) -> np.ndarray:
         """
-        Use VMEC to compute the B field.
+        Use VMEC to compute the |B| field.
+
+        If VMEC fails, return an aray of zeros with length len_B_field_out
+
+        x: Fourier variables array for VMEC.
         """
         # Compute modB on a grid
         modB = self.tracer.compute_modB_vmec(
@@ -144,11 +148,7 @@ class StellaratorDesign:
         )
 
         # VMEC failure
-        # TODO: @misha check this failure condition. It is ambigous, I changed it from if modB == [] but that is not a good condition since it will try to compare (numerical) modB against an empty list which is undefined. Check line 391 of tracer_boozer.py if there is a better way to assign the empty array, can be we np.empty(vec_len) instead? I don't want to change it myself in case there are downstream effects that I don't know about.
-        # if not modB:
-        #     return np.zeros(self.len_B_field_out)
-        all_zeros = not np.any(modB)
-        if all_zeros:
+        if len(modB) != self.len_B_field_out:
             return np.zeros(self.len_B_field_out)
 
         # print some stuff
