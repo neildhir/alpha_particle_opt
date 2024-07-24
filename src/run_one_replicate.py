@@ -18,7 +18,7 @@ def run(
     train_Y: Tensor,
     bounds: Tensor,
     nonlinear_inequality_constraints: list[tuple[callable, bool]],
-    SMOKE_TEST: bool,
+    SMOKE_TEST: bool = False,
     iterations: int = 50,
     verbose: bool = True,
 ) -> None:
@@ -57,7 +57,7 @@ def run(
 
         # Optimise and get new observation
         new_x, new_f = optimize_acqf_and_get_new_point(
-            f, ei, bounds, nonlinear_inequality_constraints, SMOKE_TEST
+            f, ic_generator, ei, bounds, nonlinear_inequality_constraints, SMOKE_TEST
         )  # TODO: add stoppping criterion
 
         # Update training points
@@ -82,9 +82,14 @@ def run(
 
 
 if __name__ == "__main__":
+
+    # TODO: @neil add all nfp4 input files with mirror 1.35 in the name (see original repo)
+    # https://github.com/mishapadidar/alpha_particle_opt/tree/main/experiments/plot/configs
+    # And found optimal: https://github.com/mishapadidar/alpha_particle_opt/blob/main/experiments/plot/configs/input.nfp4_QH_cold_high_res_phase_one_mirror_1.35_aspect_7.0_iota_0.89
+
     vmec_input_files = [
         "./src/vmec_input_files/input.nfp4_QH_cold_high_res_mirror_feasible",
-        "./src/vmec_input_files/input.nfp4_QH_warm_start_high_res",
+        # "./src/vmec_input_files/input.nfp4_QH_warm_start_high_res",
         "./src/vmec_input_files/input.nfp4_QH_cold_high_res",
     ]
     design = StellaratorDesign()

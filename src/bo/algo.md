@@ -23,9 +23,9 @@
   - Assignee: @neil
 - [ ] Update function arguments to reflect paper notation e.g. $\mathbf{w}$ instead of $\mathbf{x}$ in the objective function $\mathcal{J}(\cdot)$ as well as in constraint calc. (amongst other places)
   - Assignee: @misha
-- [ ] Box constraints
+- [x] Box constraints
   - Assignee: @misha & @neil
 - [ ] Change vmec output 'settings' (?) so that it doesn't generate any files each time it is being called
   - Assignee: @michael & @misha
-- [ ] Make class of the stuff in the `tracing_example.py` file
+- [x] Make class of the stuff in the `tracing_example.py` file
   - Assignee: @neil

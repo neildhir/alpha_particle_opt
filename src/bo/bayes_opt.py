@@ -26,6 +26,7 @@ def build_surrogate_model(
         The model and the marginal log likelihood.
     """
 
+    # TODO: add bounds
     # Build surrogate model (gp)
     model = SingleTaskGP(
         train_X=train_X,
@@ -40,7 +41,7 @@ def build_surrogate_model(
 
 def optimize_acqf_and_get_new_point(
     f: callable,
-    ic_generator: callabe,
+    ic_generator: callable,
     acq_func: ExpectedImprovement,
     bounds: Tensor,
     nonlinear_inequality_constraints: list[tuple[callable, bool]],

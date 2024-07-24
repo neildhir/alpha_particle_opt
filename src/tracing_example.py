@@ -4,7 +4,8 @@ import sys
 sys.path.insert(0, os.getcwd())
 from mpi4py import MPI
 import numpy as np
-from torch import Tensor, tensor, inf, cat
+from torch import Tensor, tensor, cat
+from scipy.spatial import ConvexHull
 
 from src.trace.trace_boozer import TraceBoozer
 
@@ -203,6 +204,35 @@ class StellaratorDesign:
 
         return [(B_diff_lower, True), (B_diff_upper, True)]
 
+    def calculate_bounds(self, train_X: Tensor) -> Tensor:
+        """
+        Function calculates the bounds for the input x based on the training data. Done by calculating the convex closure (convex hull) of all the input Fourier coefficients. This is a bit hand-wavy, but it's a start - the true region is almost surely not convex.
+
+        Parameters
+        ----------
+        train_X : Tensor
+            Input
+
+        Returns
+        -------
+        Tensor
+            Bounds for the Fourier coefficients
+        """
+        # TODO: implement this, we could also take x0, +/- 10% either way as the bounds
+
+        # Compute the convex hull
+        hull = ConvexHull(train_X)
+
+        # Get the vertices of the convex hull
+        hull_vertices = train_X[hull.vertices]
+
+        # Compute min and max for each dimension
+        min_values = np.min(hull_vertices, axis=0)
+        max_values = np.max(hull_vertices, axis=0)
+
+        # TODO: pass to tensor and return
+        return 1.0
+
     def get_init_BO_params(
         self, input_files: str | list[str]
     ) -> tuple[Tensor, Tensor, Tensor, list[tuple[callable, bool]]]:
@@ -261,10 +291,8 @@ class StellaratorDesign:
 
         assert self.d == train_X.shape[1]  # Dimension of the input space (# of Fourier coefficients)
 
-        # The upper and lower bounds and specified with inf because we have non-linear inequality constraints -- see docstring for optimize_acqf
-        bounds = tensor([[-inf] * self.d, [inf] * self.d])  # TODO: fix this so that we have finite bounds
+        bounds = self.calculate_bounds(train_X)
         constraints = self.acqf_nonlinear_inequality_constraints()
-
         return train_X, train_Y, bounds, constraints
 
 
@@ -276,4 +304,5 @@ if __name__ == "__main__":
         "./src/vmec_input_files/input.nfp4_QH_cold_high_res_mirror_feasible",
         "./src/vmec_input_files/input.nfp4_QH_warm_start_high_res",
     ]
+    vmec_input_file = "./src/vmec_input_files/input.test_misha"
     train_X, train_Y, bounds, constraints = test.get_init_BO_params(vmec_input_file)
