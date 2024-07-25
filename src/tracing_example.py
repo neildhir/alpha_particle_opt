@@ -233,7 +233,7 @@ class StellaratorDesign:
         assert len(min_values) == self.d
         assert len(max_values) == self.d
 
-        return stack([min_values, max_values])  # 2 x d
+        return stack([tensor(min_values), tensor(max_values)])  # 2 x d
 
     def get_init_BO_params(
         self, input_files: str | list[str]
