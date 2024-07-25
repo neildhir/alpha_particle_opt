@@ -4,7 +4,7 @@ import sys
 sys.path.insert(0, os.getcwd())
 from mpi4py import MPI
 import numpy as np
-from torch import Tensor, tensor, cat
+from torch import Tensor, tensor, cat, stack
 from scipy.spatial import ConvexHull
 
 from src.trace.trace_boozer import TraceBoozer
@@ -230,8 +230,10 @@ class StellaratorDesign:
         min_values = np.min(hull_vertices, axis=0)
         max_values = np.max(hull_vertices, axis=0)
 
-        # TODO: pass to tensor and return
-        return 1.0
+        assert len(min_values) == self.d
+        assert len(max_values) == self.d
+
+        return stack([min_values, max_values])  # 2 x d
 
     def get_init_BO_params(
         self, input_files: str | list[str]
