@@ -7,6 +7,7 @@ import time
 
 from tracing_example import StellaratorDesign
 from bo.bayes_opt import build_surrogate_model, optimize_acqf_and_get_new_point
+import os
 
 SMOKE_TEST = environ.get("SMOKE_TEST")  # TODO: finish this
 
@@ -83,15 +84,11 @@ def run(
 
 if __name__ == "__main__":
 
-    # TODO: @neil add all nfp4 input files with mirror 1.35 in the name (see original repo)
-    # https://github.com/mishapadidar/alpha_particle_opt/tree/main/experiments/plot/configs
-    # And found optimal: https://github.com/mishapadidar/alpha_particle_opt/blob/main/experiments/plot/configs/input.nfp4_QH_cold_high_res_phase_one_mirror_1.35_aspect_7.0_iota_0.89
-
-    vmec_input_files = [
-        "./src/vmec_input_files/input.nfp4_QH_cold_high_res_mirror_feasible",
-        # "./src/vmec_input_files/input.nfp4_QH_warm_start_high_res",
-        "./src/vmec_input_files/input.nfp4_QH_cold_high_res",
-    ]
+    vmec_input_files = []
+    directory = "./src/vmec_input_files/nfp4"
+    for filename in os.listdir(directory):
+        if filename.startswith("input.nfp4"):
+            vmec_input_files.append(os.path.join(directory, filename))
     design = StellaratorDesign()
     train_X, train_Y, bounds, constraints = design.get_init_BO_params(vmec_input_files)
     SMOKE_TEST = True

@@ -218,7 +218,7 @@ class StellaratorDesign:
         Tensor
             Bounds for the Fourier coefficients
         """
-        # TODO: implement this, we could also take x0, +/- 10% either way as the bounds
+        # TODO: we could also take x0, +/- 10% either way as the bounds
 
         # Compute the convex hull
         hull = ConvexHull(train_X)
@@ -253,6 +253,7 @@ class StellaratorDesign:
         """
 
         # TODO: the GPR model requires us to scale the input features to the unit cube and standardize the output. We should do this here.
+        # TODO, fix InputDataWarning: Input data is not standardized (mean = tensor([2.3368], dtype=torch.float64), std = tensor([0.9414], dtype=torch.float64)). Please consider scaling the input to zero mean and unit variance.
 
         if isinstance(input_files, str):
             # Build tracer for this input file
@@ -289,8 +290,6 @@ class StellaratorDesign:
                 else:
                     train_Y = cat((train_Y, tensor([y0]).unsqueeze(-1)), dim=0)
 
-        # TODO, fix InputDataWarning: Input data is not standardized (mean = tensor([2.3368], dtype=torch.float64), std = tensor([0.9414], dtype=torch.float64)). Please consider scaling the input to zero mean and unit variance.
-
         assert self.d == train_X.shape[1]  # Dimension of the input space (# of Fourier coefficients)
 
         bounds = self.calculate_bounds(train_X)
@@ -299,12 +298,10 @@ class StellaratorDesign:
 
 
 if __name__ == "__main__":
-    test = StellaratorDesign()
-    vmec_input_file = "/Users/z004mktz/Code/fusion/alpha_particle_opt/src/vmec_input_files/input.nfp4_QH_cold_high_res"  # Used the cold start (input.nfp4_QH_cold_high_res) of this file instead of the default warm start (input.nfp4_QH_warm_start_high_res)
-    vmec_input_file = [
-        "./src/vmec_input_files/input.nfp4_QH_cold_high_res",
-        "./src/vmec_input_files/input.nfp4_QH_cold_high_res_mirror_feasible",
-        "./src/vmec_input_files/input.nfp4_QH_warm_start_high_res",
-    ]
-    vmec_input_file = "./src/vmec_input_files/input.test_misha"
-    train_X, train_Y, bounds, constraints = test.get_init_BO_params(vmec_input_file)
+    vmec_input_files = []
+    directory = "./src/vmec_input_files/nfp4"
+    for filename in os.listdir(directory):
+        if filename.startswith("input.nfp4"):
+            vmec_input_files.append(os.path.join(directory, filename))
+    design = StellaratorDesign()
+    train_X, train_Y, bounds, constraints = design.get_init_BO_params(vmec_input_files)

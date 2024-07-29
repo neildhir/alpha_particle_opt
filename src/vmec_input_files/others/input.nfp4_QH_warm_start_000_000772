@@ -1,0 +1,49 @@
+! Source: https://github.com/rogeriojorge/some_optimizations/blob/282d8134ec3b3cd79fdc948fdcff0f2e15cf6209/TurbulenceSupressedEP/out_constraint-minus0.5_s0.1_alpha0_NFP4_QH/input.nfp4_QH_warm_start_000_000772
+&INDATA
+! This file created by simsopt on September 19 2022, 18:18:17
+
+! ---- Geometric parameters ----
+NFP = 4
+LASYM = F
+
+! ---- Resolution parameters ----
+MPOL = 5
+NTOR = 5
+NS_ARRAY    =     16
+NITER_ARRAY =   1200
+FTOL_ARRAY  =  1e-11
+
+! ---- Boundary toroidal flux ----
+PHIEDGE = 0.048
+
+! ---- Pressure profile specification ----
+PMASS_TYPE = "power_series"
+AM = 0.0
+PRES_SCALE = 1.0
+
+! ---- Profile specification of iota or current ----
+NCURR = 1
+CURTOR = 0.0
+PCURR_TYPE = "power_series"
+AC = 0.0
+
+! ---- Other numerical parameters ----
+DELT = 0.9
+NSTEP = 200
+
+! ---- Boundary shape. Array index order is (n, m) ----
+RBC(   0,   0) =  1.000000000000000e+00,    ZBS(   0,   0) =  0.000000000000000e+00
+RBC(   1,   0) =  1.744543035241375e-01,    ZBS(   1,   0) =  1.387315868757917e-01
+RBC(   2,   0) =  1.136687583716496e-02,    ZBS(   2,   0) =  1.236430238281105e-02
+RBC(  -2,   1) = -1.408157092399531e-02,    ZBS(  -2,   1) =  1.869757071912260e-02
+RBC(  -1,   1) = -1.157866674821821e-01,    ZBS(  -1,   1) =  4.891513601926794e-02
+RBC(   0,   1) =  1.722835990581170e-01,    ZBS(   0,   1) =  1.773368588352629e-01
+RBC(   1,   1) =  3.843117027338452e-02,    ZBS(   1,   1) =  3.869266965113290e-02
+RBC(   2,   1) =  4.518842419013703e-03,    ZBS(   2,   1) =  3.820093540374978e-03
+RBC(  -2,   2) =  1.344845165031549e-02,    ZBS(  -2,   2) = -1.408990141143263e-02
+RBC(  -1,   2) =  1.932759908639454e-02,    ZBS(  -1,   2) =  2.346000202287210e-02
+RBC(   0,   2) =  2.624027039781278e-02,    ZBS(   0,   2) =  2.130902234573919e-02
+RBC(   1,   2) =  1.582929435443056e-03,    ZBS(   1,   2) =  4.504751821064107e-04
+RBC(   2,   2) = -1.126111433130084e-04,    ZBS(   2,   2) = -2.726906009481269e-04
+/
+
