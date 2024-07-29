@@ -1,3 +1,5 @@
+*.pyc
+
 # vmex/simsopt stuff
 threed1.*
 wout_*.nc
