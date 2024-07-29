@@ -8,6 +8,7 @@ import time
 from tracing_example import StellaratorDesign
 from bo.bayes_opt import build_surrogate_model, optimize_acqf_and_get_new_point
 import os
+from torch import load
 
 SMOKE_TEST = environ.get("SMOKE_TEST")  # TODO: finish this
 
@@ -45,7 +46,7 @@ def run(
     """
 
     # Initialize the model with available training data
-    mll, model = build_surrogate_model(train_X, train_Y)
+    mll, model = build_surrogate_model(train_X, train_Y, bounds)
     for i in range(iterations if not SMOKE_TEST else 4):
 
         t0 = time.monotonic()
@@ -66,7 +67,7 @@ def run(
         train_Y = vstack([train_Y, new_f])
 
         # Re-build model with new data, ready for fitting on next iteration
-        mll, model = build_surrogate_model(train_X, train_Y)  # TODO: with state-dict here?
+        mll, model = build_surrogate_model(train_X, train_Y, bounds)  # TODO: with state-dict here?
 
         t1 = time.monotonic()
         best_f = train_Y.min().item()
@@ -85,12 +86,13 @@ def run(
 if __name__ == "__main__":
 
     vmec_input_files = []
-    directory = "./src/vmec_input_files/nfp4"
+    directory = "./src/vmec_input_files/nfp4/ours"
     for filename in os.listdir(directory):
         if filename.startswith("input.nfp4"):
             vmec_input_files.append(os.path.join(directory, filename))
     design = StellaratorDesign()
     train_X, train_Y, bounds, constraints = design.get_init_BO_params(vmec_input_files)
+
     SMOKE_TEST = True
 
     # Optimise

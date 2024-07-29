@@ -4,7 +4,7 @@ import sys
 sys.path.insert(0, os.getcwd())
 from mpi4py import MPI
 import numpy as np
-from torch import Tensor, tensor, cat, stack
+from torch import Tensor, tensor, cat, stack, load
 from scipy.spatial import ConvexHull
 
 from src.trace.trace_boozer import TraceBoozer
@@ -185,7 +185,7 @@ class StellaratorDesign:
 
     def acqf_nonlinear_inequality_constraints(self) -> list[tuple[callable, bool]]:
         """
-        This function returns the nonlinear inequality constraints for the acquisition function. Nonlinear inequality constraints: equation (13) and (14) of [1], section 4.2.
+        This function returns the nonlinear (intra-point) inequality constraints for the acquisition function. Nonlinear inequality constraints: equation (13) and (14) of [1], section 4.2.
 
         References
         ----------
@@ -195,12 +195,14 @@ class StellaratorDesign:
         # XXX: we could have separate constraints per dimension
 
         B_field_cache = {}  # Container to store already computed B field values
-        B_diff_lower = lambda x: -(
-            self.B_lb - self.get_B_field(x, B_field_cache)
+        # B(x) - B_lb >= 0
+        B_diff_lower = (
+            lambda x: self.get_B_field(x, B_field_cache) - self.B_lb
         )  # Negated to conform to optimize_acqf docstring instructions
-        B_diff_upper = lambda x: -(
-            self.get_B_field(x, B_field_cache) - self.B_ub
-        )  # Negated to conform to optimize_acqf docstring instructions
+
+        # B_ub - B(x) >= 0
+        B_diff_upper = lambda x: self.B_ub - self.get_B_field(x, B_field_cache)
+        # Negated to conform to optimize_acqf docstring instructions
 
         return [(B_diff_lower, True), (B_diff_upper, True)]
 
@@ -250,8 +252,8 @@ class StellaratorDesign:
         """
 
         # Compute min and max for each dimension
-        min_values = train_X.min(dim=1)
-        max_values = train_X.max(dim=1)
+        min_values = train_X.min(dim=0)
+        max_values = train_X.max(dim=0)
 
         # Add 10% slack to the bounds
         return stack([0.9 * min_values.values, 1.1 * max_values.values])  # 2 x d
@@ -273,55 +275,60 @@ class StellaratorDesign:
             Training data, training labels, bounds, and constraints
         """
 
-        # TODO: the GPR model requires us to scale the input features to the unit cube and standardize the output. We should do this here.
-        # TODO, fix InputDataWarning: Input data is not standardized (mean = tensor([2.3368], dtype=torch.float64), std = tensor([0.9414], dtype=torch.float64)). Please consider scaling the input to zero mean and unit variance.
+        try:
+            bo_params = load("bo_params.pth")
+            train_X = bo_params["train_X"]
+            train_Y = bo_params["train_Y"]
 
-        assert len(input_files) > 0, "No input files provided."
+        except FileNotFoundError:
 
-        if isinstance(input_files, str):
-            # Build tracer for this input file
-            self.tracer = self.build_tracer(input_files)
-            # Sync seeds across MPI ranks
-            self.tracer.sync_seeds()
+            assert len(input_files) > 0, "No input files provided."
 
-            x0 = self.tracer.x0
-            assert self.d == len(x0)  # Dimension of the input space (# of Fourier coefficients)
-            train_X = tensor(x0).view(1, -1)  # 1 x d
-            y0 = self.f(x0)
-            train_Y = tensor([y0]).unsqueeze(-1)
-
-        else:
-            assert isinstance(input_files, list)
-            train_X = None
-            train_Y = None
-            for file in input_files:
-                print("\nProcessing file:", file)
-                # Build tracer for each input file
-                self.tracer = self.build_tracer(file)
+            if isinstance(input_files, str):
+                # Build tracer for this input file
+                self.tracer = self.build_tracer(input_files)
                 # Sync seeds across MPI ranks
                 self.tracer.sync_seeds()
 
-                # Features
                 x0 = self.tracer.x0
                 assert self.d == len(x0)  # Dimension of the input space (# of Fourier coefficients)
-                if train_X is None:
-                    train_X = tensor(x0).view(1, -1)  # 1 x d
-                else:
-                    train_X = cat((train_X, tensor(x0).view(1, -1)), dim=0)
-
-                # Target
+                train_X = tensor(x0).view(1, -1)  # 1 x d
                 y0 = self.f(x0)
-                if train_Y is None:
-                    train_Y = tensor([y0]).unsqueeze(-1)
-                else:
-                    train_Y = cat((train_Y, tensor([y0]).unsqueeze(-1)), dim=0)
-                print("Finished.")
-                continue
+                train_Y = tensor([y0]).unsqueeze(-1)
 
-        assert self.d == train_X.shape[1]  # Dimension of the input space (# of Fourier coefficients)
+            else:
+                assert isinstance(input_files, list)
+                train_X = None
+                train_Y = None
+                for file in input_files:
+                    print("\nProcessing file:", file)
+                    # Build tracer for each input file
+                    self.tracer = self.build_tracer(file)
+                    # Sync seeds across MPI ranks
+                    self.tracer.sync_seeds()
+
+                    # Features
+                    x0 = self.tracer.x0
+                    assert self.d == len(x0)  # Dimension of the input space (# of Fourier coefficients)
+                    if train_X is None:
+                        train_X = tensor(x0).view(1, -1)  # 1 x d
+                    else:
+                        train_X = cat((train_X, tensor(x0).view(1, -1)), dim=0)
+
+                    # Target
+                    y0 = self.f(x0)
+                    if train_Y is None:
+                        train_Y = tensor([y0]).unsqueeze(-1)
+                    else:
+                        train_Y = cat((train_Y, tensor([y0]).unsqueeze(-1)), dim=0)
+                    print("Finished.")
+                    continue
+
+            assert self.d == train_X.shape[1]  # Dimension of the input space (# of Fourier coefficients)
 
         bounds = self.calculate_bounds(train_X)
         constraints = self.acqf_nonlinear_inequality_constraints()
+
         return train_X, train_Y, bounds, constraints
 
 
@@ -331,6 +338,5 @@ if __name__ == "__main__":
     for filename in os.listdir(directory):
         if filename.startswith("input.nfp4"):
             vmec_input_files.append(os.path.join(directory, filename))
-    assert len(vmec_input_files) > 0, "No input files found."
     design = StellaratorDesign()
     train_X, train_Y, bounds, constraints = design.get_init_BO_params(vmec_input_files)

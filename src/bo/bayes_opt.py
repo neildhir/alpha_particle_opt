@@ -1,12 +1,13 @@
 from botorch.models import SingleTaskGP
 from gpytorch.mlls import ExactMarginalLogLikelihood
 from botorch.acquisition import ExpectedImprovement
+from botorch.models.transforms import Normalize, Standardize
 from botorch.optim import optimize_acqf
 from torch import Tensor
 
 
 def build_surrogate_model(
-    train_X: Tensor, train_Y: Tensor, state_dict=None
+    train_X: Tensor, train_Y: Tensor, bounds: Tensor, state_dict=None
 ) -> tuple[ExactMarginalLogLikelihood, SingleTaskGP]:
     """
     Initialize the Krigeing model (Gaussian process regression) for the BO loop.
@@ -17,6 +18,8 @@ def build_surrogate_model(
         Training data.
     train_Y : Tensor
         Training labels.
+    bounds : Tensor
+        The bounds of the optimization space.
     state_dict : _type_, optional
         _description_, by default None
 
@@ -26,14 +29,17 @@ def build_surrogate_model(
         The model and the marginal log likelihood.
     """
 
-    # TODO: add bounds
-    # Build surrogate model (gp)
+    # Build surrogate model, kernel uses ARD by default
     model = SingleTaskGP(
         train_X=train_X,
         train_Y=train_Y,
-    )  # Uses a scaled Matern kernel by default
+        outcome_transform=Standardize(m=1),
+        input_transform=Normalize(d=train_X.size(1), bounds=bounds),
+    )
+
     mll = ExactMarginalLogLikelihood(model.likelihood, model)
-    # load state dict if it is passed
+
+    # Load state dict if it is passed
     if state_dict is not None:
         model.load_state_dict(state_dict)
     return mll, model
@@ -44,7 +50,7 @@ def optimize_acqf_and_get_new_point(
     ic_generator: callable,
     acq_func: ExpectedImprovement,
     bounds: Tensor,
-    nonlinear_inequality_constraints: list[tuple[callable, bool]],
+    constraints: list[tuple[callable, bool]],
     SMOKE_TEST: bool,
 ) -> tuple[Tensor, Tensor]:
     """
@@ -57,8 +63,8 @@ def optimize_acqf_and_get_new_point(
     acq_func : ExpectedImprovement
         The acquisition function to be optimized.
     bounds : Tensor
-        The bounds of the optimization space.
-    nonlinear_inequality_constraints : list[tuple[callable, bool]]
+        A `2 x d` tensor of lower and upper bounds for each column of `X` (if inequality_constraints is provided, these bounds can be -inf and +inf, respectively).
+    constraints : list[tuple[callable, bool]]
         Magnetic field strength constraints as a function of x, see eq. (13) and (14) of [1], section 4.2.
 
     Returns
@@ -86,7 +92,7 @@ def optimize_acqf_and_get_new_point(
         ic_generator=ic_generator,  # TODO: make sure to switch out dummy sampler
         acq_function=acq_func,
         bounds=bounds,
-        nonlinear_inequality_constraints=nonlinear_inequality_constraints,
+        nonlinear_inequality_constraints=constraints,
         num_restarts=NUM_RESTARTS,  # XXX: perhaps reduce a spot
         raw_samples=RAW_SAMPLES,  # XXX: perhaps reduce a spot
         q=1,  # Explore methods which allow q > 1
