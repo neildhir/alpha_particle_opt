@@ -204,7 +204,7 @@ class StellaratorDesign:
 
         return [(B_diff_lower, True), (B_diff_upper, True)]
 
-    def calculate_bounds(self, train_X: Tensor) -> Tensor:
+    def calculate_hull_bounds(self, train_X: Tensor) -> Tensor:
         """
         Function calculates the bounds for the input x based on the training data. Done by calculating the convex closure (convex hull) of all the input Fourier coefficients. This is a bit hand-wavy, but it's a start - the true region is almost surely not convex.
 
@@ -218,7 +218,6 @@ class StellaratorDesign:
         Tensor
             Bounds for the Fourier coefficients
         """
-        # TODO: we could also take x0, +/- 10% either way as the bounds
 
         # Compute the convex hull
         hull = ConvexHull(train_X)
@@ -234,6 +233,28 @@ class StellaratorDesign:
         assert len(max_values) == self.d
 
         return stack([tensor(min_values), tensor(max_values)])  # 2 x d
+
+    def calculate_bounds(self, train_X: Tensor) -> Tensor:
+        """
+        Function calculates the box bounds for the input x based on the training data.
+
+        Parameters
+        ----------
+        train_X : Tensor
+            Input
+
+        Returns
+        -------
+        Tensor
+            Bounds for the Fourier coefficients
+        """
+
+        # Compute min and max for each dimension
+        min_values = train_X.min(dim=1)
+        max_values = train_X.max(dim=1)
+
+        # Add 10% slack to the bounds
+        return stack([0.9 * min_values.values, 1.1 * max_values.values])  # 2 x d
 
     def get_init_BO_params(
         self, input_files: str | list[str]
@@ -277,6 +298,8 @@ class StellaratorDesign:
                 print("\nProcessing file:", file)
                 # Build tracer for each input file
                 self.tracer = self.build_tracer(file)
+                # Sync seeds across MPI ranks
+                self.tracer.sync_seeds()
 
                 # Features
                 x0 = self.tracer.x0
@@ -292,6 +315,8 @@ class StellaratorDesign:
                     train_Y = tensor([y0]).unsqueeze(-1)
                 else:
                     train_Y = cat((train_Y, tensor([y0]).unsqueeze(-1)), dim=0)
+                print("Finished.")
+                continue
 
         assert self.d == train_X.shape[1]  # Dimension of the input space (# of Fourier coefficients)
 
