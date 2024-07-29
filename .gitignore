@@ -5,6 +5,7 @@ threed1.*
 wout_*.nc
 *_000_000000
 parvmecinfo.txt
+fort.*
 
 .DS_Store
 

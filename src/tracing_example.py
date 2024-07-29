@@ -255,6 +255,8 @@ class StellaratorDesign:
         # TODO: the GPR model requires us to scale the input features to the unit cube and standardize the output. We should do this here.
         # TODO, fix InputDataWarning: Input data is not standardized (mean = tensor([2.3368], dtype=torch.float64), std = tensor([0.9414], dtype=torch.float64)). Please consider scaling the input to zero mean and unit variance.
 
+        assert len(input_files) > 0, "No input files provided."
+
         if isinstance(input_files, str):
             # Build tracer for this input file
             self.tracer = self.build_tracer(input_files)
@@ -272,6 +274,7 @@ class StellaratorDesign:
             train_X = None
             train_Y = None
             for file in input_files:
+                print("\nProcessing file:", file)
                 # Build tracer for each input file
                 self.tracer = self.build_tracer(file)
 
@@ -299,9 +302,10 @@ class StellaratorDesign:
 
 if __name__ == "__main__":
     vmec_input_files = []
-    directory = "./src/vmec_input_files/nfp4"
+    directory = "./src/vmec_input_files/nfp4/ours"
     for filename in os.listdir(directory):
         if filename.startswith("input.nfp4"):
             vmec_input_files.append(os.path.join(directory, filename))
+    assert len(vmec_input_files) > 0, "No input files found."
     design = StellaratorDesign()
     train_X, train_Y, bounds, constraints = design.get_init_BO_params(vmec_input_files)
