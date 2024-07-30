@@ -82,21 +82,18 @@ def optimize_acqf_and_get_new_point(
     """
 
     NUM_RESTARTS = 10 if not SMOKE_TEST else 2
-    RAW_SAMPLES = 512 if not SMOKE_TEST else 32
-
-    stopping_criterion = None  # TODO: implement
+    RAW_SAMPLES = 128 if not SMOKE_TEST else 32
 
     # Initial condition (IC) generation is a fairly unsupported feature in BoTorch (at the time or writing). For details see: https://github.com/pytorch/botorch/issues/1572
 
     candidates, _ = optimize_acqf(
-        ic_generator=ic_generator,  # TODO: make sure to switch out dummy sampler
         acq_function=acq_func,
         q=1,  # Explore methods which allow q > 1
         bounds=bounds,
-        num_restarts=NUM_RESTARTS,  # XXX: perhaps reduce a spot
-        raw_samples=RAW_SAMPLES,  # XXX: perhaps reduce a spot
+        num_restarts=NUM_RESTARTS,
+        raw_samples=RAW_SAMPLES,
         nonlinear_inequality_constraints=constraints,
-        batch_initial_conditions=None,  # TODO: implement
+        ic_generator=ic_generator,
     )
 
     # Observe new values

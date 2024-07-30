@@ -12,7 +12,7 @@ from src.trace.trace_boozer import TraceBoozer
 
 
 class StellaratorDesign:
-    def __init__(self):
+    def __init__(self, testing: bool = False):
 
         # MPI stuff
         self.comm = MPI.COMM_WORLD
@@ -53,8 +53,20 @@ class StellaratorDesign:
         self.len_B_field_out = self.ns_B * self.ntheta_B * self.nzeta_B
         self.mirror_target = 1.35
         self.eps_B = (self.mirror_target - 1.0) / (self.mirror_target + 1.0)
-        self.B_ub = self.target_volavgB * (1 + self.eps_B) * np.ones(self.len_B_field_out)  # upper bound, eq. 14
-        self.B_lb = self.target_volavgB * (1 - self.eps_B) * np.ones(self.len_B_field_out)  # lower bound, eq. 14
+        self.B_upper_limit = (
+            self.target_volavgB * (1 + self.eps_B) * np.ones(self.len_B_field_out)
+        )  # upper bound, eq. 14
+        self.B_lower_limit = (
+            self.target_volavgB * (1 - self.eps_B) * np.ones(self.len_B_field_out)
+        )  # lower bound, eq. 14
+
+        if testing:
+            # Note absolute path
+            vmec_input_file = "/Users/z004mktz/Code/fusion/alpha_particle_opt/src/vmec_input_files/nfp4/ours/input.nfp4_QH_cold_high_res"
+            # Build tracer for this input file
+            self.tracer = self.build_tracer(vmec_input_file)
+            # Sync seeds across MPI ranks
+            self.tracer.sync_seeds()
 
     def build_tracer(self, vmec_input_file: str) -> TraceBoozer:
         return TraceBoozer(
@@ -118,7 +130,7 @@ class StellaratorDesign:
 
         return res
 
-    @cache
+    # @cache
     def compute_B_field_vmec(self, x: np.ndarray, verbose: bool = False) -> np.ndarray:
         """
         Use VMEC to compute the |B| field.
@@ -141,6 +153,8 @@ class StellaratorDesign:
             print("B-interval:", np.min(modB), np.max(modB))
             print("Mirror Ratio:", np.max(modB) / np.min(modB))
 
+        # TODO: write snippet here which removes all VMEC-generated rubbish.
+
         return modB
 
     def B_diff_lower(self, x: np.ndarray) -> np.ndarray:
@@ -157,7 +171,7 @@ class StellaratorDesign:
         np.ndarray
             Difference between B(x) and B_lb
         """
-        return self.compute_B_field_vmec(x) - self.B_lb  # <= 0
+        return self.compute_B_field_vmec(x) - self.B_lower_limit  # >= 0
 
     def B_diff_upper(self, x: np.ndarray) -> np.ndarray:
         """
@@ -173,7 +187,7 @@ class StellaratorDesign:
         np.ndarray
             Difference between B_ub and B(x)
         """
-        return self.B_ub - self.compute_B_field_vmec(x)  # >= 0
+        return self.B_upper_limit - self.compute_B_field_vmec(x)  # >= 0
 
     def acqf_nonlinear_inequality_constraints(self) -> list[tuple[callable, bool]]:
         """
@@ -184,6 +198,31 @@ class StellaratorDesign:
         [1] Bindel, David, Matt Landreman, and Misha Padidar. "Direct optimization of fast-ion confinement in stellarators." Plasma Physics and Controlled Fusion 65.6 (2023): 065012.
         """
         return [(self.B_diff_lower, True), (self.B_diff_upper, True)]
+
+    def compound_nonlinear_constraint(self, X: np.ndarray) -> np.ndarray:
+        """
+        Function to compute the compound nonlinear constraint for the acquisition function.
+
+        Parameters
+        ----------
+        X : np.ndarray
+            2D array of candidate Fourier coefficients (candidates x # Fourier coefficients)
+
+        Returns
+        -------
+        np.ndarray
+            Valid points that satisfy the constraints
+        """
+        # Compute B field for all points in X
+        B_x = np.array([self.compute_B_field_vmec(x) for x in X])
+        # Create a mask for points that satisfy the constraints
+        mask = np.logical_and(self.B_lower_limit <= B_x, B_x <= self.B_upper_limit)
+        # Find points where all constraints are satisfied
+        all_constraints_satisfied = np.all(mask, axis=1)
+        # Filter valid points
+        valid_points = X[all_constraints_satisfied]
+
+        return valid_points
 
     def calculate_hull_bounds(self, train_X: Tensor) -> Tensor:
         """

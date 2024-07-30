@@ -1,21 +1,21 @@
 from os import environ
 
+from src.bo.initial_canditates import gen_batch_initial_conditions_nonlinear
 from torch import Tensor, vstack
 from botorch.fit import fit_gpytorch_mll
 from botorch.acquisition import ExpectedImprovement
 import time
+from functools import partial
 
 from tracing_example import StellaratorDesign
 from bo.bayes_opt import build_surrogate_model, optimize_acqf_and_get_new_point
 import os
-from torch import load
 
 SMOKE_TEST = environ.get("SMOKE_TEST")  # TODO: finish this
 
 
 def run(
     f: callable,
-    ic_generator: callable,
     train_X: Tensor,
     train_Y: Tensor,
     bounds: Tensor,
@@ -47,7 +47,14 @@ def run(
 
     # Initialize the model with available training data
     mll, model = build_surrogate_model(train_X, train_Y, bounds)
-    for i in range(iterations if not SMOKE_TEST else 4):
+
+    # Build initial candidates generator for the acquisition function
+    _gen_batch_initial_conditions_nonlinear = partial(
+        gen_batch_initial_conditions_nonlinear,
+        nonlinear_constraint=nonlinear_inequality_constraints,
+    )  # TODO: modify to allow for multiple constraints
+
+    for i in range(4 if SMOKE_TEST else iterations):
 
         t0 = time.monotonic()
 
@@ -59,8 +66,8 @@ def run(
 
         # Optimise and get new observation
         new_x, new_f = optimize_acqf_and_get_new_point(
-            f, ic_generator, ei, bounds, nonlinear_inequality_constraints, SMOKE_TEST
-        )  # TODO: add stoppping criterion
+            f, _gen_batch_initial_conditions_nonlinear, ei, bounds, nonlinear_inequality_constraints, SMOKE_TEST
+        )
 
         # Update training points
         train_X = vstack([train_X, new_x])
@@ -96,4 +103,4 @@ if __name__ == "__main__":
     SMOKE_TEST = True
 
     # Optimise
-    run(design.f, design.sample_fake_Fourier_coefficients, train_X, train_Y, bounds, constraints, SMOKE_TEST)
+    run(design.f, train_X, train_Y, bounds, constraints, SMOKE_TEST)

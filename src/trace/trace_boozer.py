@@ -508,7 +508,7 @@ if __name__ == "__main__":
     # test modB function
     modB = tracer.compute_modB_vmec(x0)
     print("")
-    print('modB', modB)
+    print("modB", modB)
 
     tmax = 1e-4
     n_particles = 10

@@ -225,6 +225,7 @@ def gen_batch_initial_conditions_nonlinear(
                     .cpu()
                 )
                 X_rnd = X_rnd.reshape(-1, ndims)
+                # TODO: modify to allow for multiple constraints
                 where = torch.where(nonlinear_constraint(X_rnd) >= 0)[0]
                 all_points = torch.cat([all_points, X_rnd[where, :]], axis=0)
                 counter += 1
@@ -281,36 +282,6 @@ def gen_batch_initial_conditions_nonlinear(
         BadInitialCandidatesWarning,
     )
     return batch_initial_conditions
-
-
-def get_batch_initial_conditions_nonlinear_function(
-    nonlinear_constraint: Optional[callable] = None,
-):
-    def _gen_batch_initial_conditions_nonlinear(
-        acq_function,
-        bounds,
-        q,
-        num_restarts,
-        raw_samples,
-        fixed_features=None,
-        options=None,
-        inequality_constraints=None,
-        equality_constraints=None,
-    ):
-        return gen_batch_initial_conditions_nonlinear(
-            acq_function,
-            bounds,
-            q,
-            num_restarts,
-            raw_samples,
-            fixed_features,
-            options,
-            inequality_constraints,
-            equality_constraints,
-            nonlinear_constraint,
-        )
-
-    return _gen_batch_initial_conditions_nonlinear
 
 
 def initialize_q_batch(X: Tensor, Y: Tensor, n: int, eta: float = 1.0) -> Tensor:
