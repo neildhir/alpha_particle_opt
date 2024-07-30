@@ -50,7 +50,7 @@ def optimize_acqf_and_get_new_point(
     ic_generator: callable,
     acq_func: ExpectedImprovement,
     bounds: Tensor,
-    constraints: list[tuple[callable, bool]],
+    constraint: list[tuple[callable, bool]],
     SMOKE_TEST: bool,
 ) -> tuple[Tensor, Tensor]:
     """
@@ -88,13 +88,13 @@ def optimize_acqf_and_get_new_point(
 
     candidates, _ = optimize_acqf(
         acq_function=acq_func,
-        q=1,  # Explore methods which allow q > 1
         bounds=bounds,
+        q=1,  # Explore methods which allow q > 1
         num_restarts=NUM_RESTARTS,
         raw_samples=RAW_SAMPLES,
-        nonlinear_inequality_constraints=constraints,
+        nonlinear_inequality_constraints=constraint,
         ic_generator=ic_generator,
-    )
+    )  # Should also explore fixed features (i.e. fixed Fourier coefficients)
 
     # Observe new values
     new_x = candidates.detach()  # Detach to avoid gradient updates

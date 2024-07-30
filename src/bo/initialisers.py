@@ -225,9 +225,12 @@ def gen_batch_initial_conditions_nonlinear(
                     .cpu()
                 )
                 X_rnd = X_rnd.reshape(-1, ndims)
-                # TODO: modify to allow for multiple constraints
-                where = torch.where(nonlinear_constraint(X_rnd) >= 0)[0]
+                where = torch.all(nonlinear_constraint(X_rnd) >= 0, dim=1)
                 all_points = torch.cat([all_points, X_rnd[where, :]], axis=0)
+
+                # valid_points = nonlinear_constraint(X_rnd)
+                # all_points = torch.cat([all_points, valid_points], axis=0)
+
                 counter += 1
                 if seed is not None:
                     seed += 1

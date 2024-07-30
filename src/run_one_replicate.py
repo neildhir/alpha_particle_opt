@@ -1,6 +1,6 @@
 from os import environ
 
-from src.bo.initial_canditates import gen_batch_initial_conditions_nonlinear
+from bo.initialisers import gen_batch_initial_conditions_nonlinear
 from torch import Tensor, vstack
 from botorch.fit import fit_gpytorch_mll
 from botorch.acquisition import ExpectedImprovement
@@ -19,7 +19,7 @@ def run(
     train_X: Tensor,
     train_Y: Tensor,
     bounds: Tensor,
-    nonlinear_inequality_constraints: list[tuple[callable, bool]],
+    nonlinear_inequality_constraints: callable,
     SMOKE_TEST: bool = False,
     iterations: int = 50,
     verbose: bool = True,
@@ -37,7 +37,7 @@ def run(
         Target (expected energy loss for this shape of the plasma boundary represented by the Fourier coefficients)
     bounds : Tensor
         Bounds of the optimization space
-    nonlinear_inequality_constraints : list[tuple[callable, bool]]
+    nonlinear_inequality_constraints : callable
         Magnetic field strength constraints as a function of x
     iterations : int, optional
         Number of operations, by default 5 -- will be replaced with a stopping criterion
@@ -52,7 +52,7 @@ def run(
     _gen_batch_initial_conditions_nonlinear = partial(
         gen_batch_initial_conditions_nonlinear,
         nonlinear_constraint=nonlinear_inequality_constraints,
-    )  # TODO: modify to allow for multiple constraints
+    )  # TODO: this constraint has to be a compound version of the one we pass to the acquisition function
 
     for i in range(4 if SMOKE_TEST else iterations):
 
@@ -66,7 +66,12 @@ def run(
 
         # Optimise and get new observation
         new_x, new_f = optimize_acqf_and_get_new_point(
-            f, _gen_batch_initial_conditions_nonlinear, ei, bounds, nonlinear_inequality_constraints, SMOKE_TEST
+            f=f,
+            ic_generator=_gen_batch_initial_conditions_nonlinear,
+            acq_func=ei,
+            bounds=bounds,
+            constraint=nonlinear_inequality_constraints,
+            SMOKE_TEST=SMOKE_TEST,
         )
 
         # Update training points

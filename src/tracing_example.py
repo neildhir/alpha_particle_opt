@@ -4,7 +4,7 @@ import sys
 sys.path.insert(0, os.getcwd())
 from mpi4py import MPI
 import numpy as np
-from torch import Tensor, tensor, cat, stack, load
+from torch import Tensor, tensor, cat, stack, load, from_numpy
 from functools import cache
 from scipy.spatial import ConvexHull
 
@@ -157,7 +157,7 @@ class StellaratorDesign:
 
         return modB
 
-    def B_diff_lower(self, x: np.ndarray) -> np.ndarray:
+    def B_lower_constraint(self, x: np.ndarray) -> np.ndarray:
         """
         Compute the difference between B(x) and B_lb. To be valid should be smaller or equal to zero.
 
@@ -173,7 +173,7 @@ class StellaratorDesign:
         """
         return self.compute_B_field_vmec(x) - self.B_lower_limit  # >= 0
 
-    def B_diff_upper(self, x: np.ndarray) -> np.ndarray:
+    def B_upper_constraint(self, x: np.ndarray) -> np.ndarray:
         """
         Compute the difference between B_ub and B(x). To be valid should larger or equal to zero.
 
@@ -197,24 +197,26 @@ class StellaratorDesign:
         ----------
         [1] Bindel, David, Matt Landreman, and Misha Padidar. "Direct optimization of fast-ion confinement in stellarators." Plasma Physics and Controlled Fusion 65.6 (2023): 065012.
         """
-        return [(self.B_diff_lower, True), (self.B_diff_upper, True)]
+        return [(self.B_lower_limit, True), (self.B_upper_limit, True)]
 
-    def compound_nonlinear_constraint(self, X: np.ndarray) -> np.ndarray:
+    def compound_nonlinear_constraint(self, X: Tensor) -> Tensor:
         """
         Function to compute the compound nonlinear constraint for the acquisition function.
 
         Parameters
         ----------
-        X : np.ndarray
+        X : Tensor
             2D array of candidate Fourier coefficients (candidates x # Fourier coefficients)
 
         Returns
         -------
-        np.ndarray
+        Tensor
             Valid points that satisfy the constraints
         """
+        raise DeprecationWarning("This function is not used anymore.")
+
         # Compute B field for all points in X
-        B_x = np.array([self.compute_B_field_vmec(x) for x in X])
+        B_x = np.array([self.compute_B_field_vmec(x) for x in X.numpy()])
         # Create a mask for points that satisfy the constraints
         mask = np.logical_and(self.B_lower_limit <= B_x, B_x <= self.B_upper_limit)
         # Find points where all constraints are satisfied
@@ -222,7 +224,31 @@ class StellaratorDesign:
         # Filter valid points
         valid_points = X[all_constraints_satisfied]
 
-        return valid_points
+        return from_numpy(valid_points)
+
+    def compound_nonlinear_constraint_differentiable(self, X: Tensor) -> Tensor:
+        """
+        Function to compute the compound nonlinear constraint for the acquisition function.
+
+        Parameters
+        ----------
+        X : Tensor
+            2D array of candidate Fourier coefficients (candidates x # Fourier coefficients)
+
+        Returns
+        -------
+        Tensor
+            Valid points that satisfy the constraints
+        """
+        raise DeprecationWarning("This function is not used anymore.")
+
+        # Compute B field for all points in X
+        B_x = from_numpy(np.vstack([design.compute_B_field_vmec(x) for x in train_X]))
+
+        B_lower_diff = B_x - self.B_lower_limit  # >= 0
+        B_upper_diff = self.B_upper_limit - B_x  # >= 0
+
+        return stack((B_lower_diff, B_upper_diff), dim=-1).min(-1).values
 
     def calculate_hull_bounds(self, train_X: Tensor) -> Tensor:
         """
@@ -346,6 +372,7 @@ class StellaratorDesign:
 
         bounds = self.calculate_bounds(train_X)
         constraints = self.acqf_nonlinear_inequality_constraints()
+        # constraints = self.compound_nonlinear_constraint
 
         return train_X, train_Y, bounds, constraints
 
