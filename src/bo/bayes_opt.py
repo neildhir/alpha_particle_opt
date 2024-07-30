@@ -91,11 +91,12 @@ def optimize_acqf_and_get_new_point(
     candidates, _ = optimize_acqf(
         ic_generator=ic_generator,  # TODO: make sure to switch out dummy sampler
         acq_function=acq_func,
+        q=1,  # Explore methods which allow q > 1
         bounds=bounds,
-        nonlinear_inequality_constraints=constraints,
         num_restarts=NUM_RESTARTS,  # XXX: perhaps reduce a spot
         raw_samples=RAW_SAMPLES,  # XXX: perhaps reduce a spot
-        q=1,  # Explore methods which allow q > 1
+        nonlinear_inequality_constraints=constraints,
+        batch_initial_conditions=None,  # TODO: implement
     )
 
     # Observe new values

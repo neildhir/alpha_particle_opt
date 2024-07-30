@@ -5,6 +5,7 @@ sys.path.insert(0, os.getcwd())
 from mpi4py import MPI
 import numpy as np
 from torch import Tensor, tensor, cat, stack, load
+from functools import cache
 from scipy.spatial import ConvexHull
 
 from src.trace.trace_boozer import TraceBoozer
@@ -75,24 +76,6 @@ class StellaratorDesign:
             smax=self.smax,
         )
 
-    @staticmethod
-    def sample_fake_Fourier_coefficients(x: np.ndarray) -> np.ndarray:
-        """
-        Sample fake Fourier coefficients for testing purposes.
-
-        Parameters
-        ----------
-        x0 : np.ndarray
-            An initial (real) Fourier coefficient configuration
-
-        Returns
-        -------
-        np.ndarray
-            A corrupted version of x0 which simulates a new Fourier coefficient sample
-        """
-        noise = 0.1 * np.random.normal(0, 1, x.shape)
-        return x + noise  # New Fourier coefficient 'sample'
-
     def f(self, x: np.ndarray) -> float:
         """
         Objective for minimization: expected energy loss f = E[3.5*np.exp(-2*c_times/tmax)]
@@ -135,6 +118,7 @@ class StellaratorDesign:
 
         return res
 
+    @cache
     def compute_B_field_vmec(self, x: np.ndarray, verbose: bool = False) -> np.ndarray:
         """
         Use VMEC to compute the |B| field.
@@ -159,29 +143,37 @@ class StellaratorDesign:
 
         return modB
 
-    def get_B_field(self, x: np.ndarray, container: dict[float, float] = None) -> dict[np.ndarray, np.ndarray]:
+    def B_diff_lower(self, x: np.ndarray) -> np.ndarray:
         """
-        Functions caches the B field values for a given x so that we don't have to recompute it.
+        Compute the difference between B(x) and B_lb. To be valid should be smaller or equal to zero.
 
         Parameters
         ----------
         x : np.ndarray
             Input
-        container : dict[float, float]
-            Container to store the B field values for a given x - if not given the B field will be computed and returned each time this function is called
 
         Returns
         -------
-        dict[np.ndarray, np.ndarray]
-            B field values for a given x
+        np.ndarray
+            Difference between B(x) and B_lb
         """
+        return self.compute_B_field_vmec(x) - self.B_lb  # <= 0
 
-        if container:
-            if x not in container:
-                container[x] = self.compute_B_field_vmec(x)
-            return container[x]
-        else:
-            return self.compute_B_field_vmec(x)
+    def B_diff_upper(self, x: np.ndarray) -> np.ndarray:
+        """
+        Compute the difference between B_ub and B(x). To be valid should larger or equal to zero.
+
+        Parameters
+        ----------
+        x : np.ndarray
+            Input
+
+        Returns
+        -------
+        np.ndarray
+            Difference between B_ub and B(x)
+        """
+        return self.B_ub - self.compute_B_field_vmec(x)  # >= 0
 
     def acqf_nonlinear_inequality_constraints(self) -> list[tuple[callable, bool]]:
         """
@@ -191,20 +183,7 @@ class StellaratorDesign:
         ----------
         [1] Bindel, David, Matt Landreman, and Misha Padidar. "Direct optimization of fast-ion confinement in stellarators." Plasma Physics and Controlled Fusion 65.6 (2023): 065012.
         """
-
-        # XXX: we could have separate constraints per dimension
-
-        B_field_cache = {}  # Container to store already computed B field values
-        # B(x) - B_lb >= 0
-        B_diff_lower = (
-            lambda x: self.get_B_field(x, B_field_cache) - self.B_lb
-        )  # Negated to conform to optimize_acqf docstring instructions
-
-        # B_ub - B(x) >= 0
-        B_diff_upper = lambda x: self.B_ub - self.get_B_field(x, B_field_cache)
-        # Negated to conform to optimize_acqf docstring instructions
-
-        return [(B_diff_lower, True), (B_diff_upper, True)]
+        return [(self.B_diff_lower, True), (self.B_diff_upper, True)]
 
     def calculate_hull_bounds(self, train_X: Tensor) -> Tensor:
         """
