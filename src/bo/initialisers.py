@@ -211,6 +211,7 @@ def gen_batch_initial_conditions_nonlinear(
             ndims = bounds.shape[1]
             counter = 0
             while all_points.shape[0] <= need:
+
                 X_rnd = (
                     get_polytope_samples(
                         n=n * q,
@@ -224,12 +225,10 @@ def gen_batch_initial_conditions_nonlinear(
                     .view(n, q, -1)
                     .cpu()
                 )
-                X_rnd = X_rnd.reshape(-1, ndims)
-                where = torch.all(nonlinear_constraint(X_rnd) >= 0, dim=1)
-                all_points = torch.cat([all_points, X_rnd[where, :]], axis=0)
 
-                # valid_points = nonlinear_constraint(X_rnd)
-                # all_points = torch.cat([all_points, valid_points], axis=0)
+                X_rnd = X_rnd.reshape(-1, ndims)
+                indices = torch.where(nonlinear_constraint(X_rnd) >= 0)[0].unique()
+                all_points = torch.cat([all_points, X_rnd[indices]], axis=0)
 
                 counter += 1
                 if seed is not None:

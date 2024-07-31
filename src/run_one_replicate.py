@@ -19,7 +19,8 @@ def run(
     train_X: Tensor,
     train_Y: Tensor,
     bounds: Tensor,
-    nonlinear_inequality_constraints: callable,
+    ic_nonlinear_inequality_constraints: callable,
+    acqf_nonlinear_inequality_constraints: callable,
     SMOKE_TEST: bool = False,
     iterations: int = 50,
     verbose: bool = True,
@@ -51,8 +52,8 @@ def run(
     # Build initial candidates generator for the acquisition function
     _gen_batch_initial_conditions_nonlinear = partial(
         gen_batch_initial_conditions_nonlinear,
-        nonlinear_constraint=nonlinear_inequality_constraints,
-    )  # TODO: this constraint has to be a compound version of the one we pass to the acquisition function
+        nonlinear_constraint=ic_nonlinear_inequality_constraints,
+    )
 
     for i in range(4 if SMOKE_TEST else iterations):
 
@@ -70,7 +71,7 @@ def run(
             ic_generator=_gen_batch_initial_conditions_nonlinear,
             acq_func=ei,
             bounds=bounds,
-            constraint=nonlinear_inequality_constraints,
+            constraint=acqf_nonlinear_inequality_constraints,
             SMOKE_TEST=SMOKE_TEST,
         )
 
@@ -108,4 +109,12 @@ if __name__ == "__main__":
     SMOKE_TEST = True
 
     # Optimise
-    run(design.f, train_X, train_Y, bounds, constraints, SMOKE_TEST)
+    run(
+        f=design.f,
+        train_X=train_X,
+        train_Y=train_Y,
+        bounds=bounds,
+        ic_nonlinear_inequality_constraints=design.compound_nonlinear_constraint_differentiable,  # Compound intra-point constraint
+        acqf_nonlinear_inequality_constraints=design.acqf_nonlinear_inequality_constraints,  # Intra-point constraints
+        SMOKE_TEST=SMOKE_TEST,
+    )

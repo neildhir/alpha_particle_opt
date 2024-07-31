@@ -5,6 +5,7 @@ sys.path.insert(0, os.getcwd())
 from mpi4py import MPI
 import numpy as np
 from torch import Tensor, tensor, cat, stack, load, from_numpy
+from torch import min as torch_min
 from functools import cache
 from scipy.spatial import ConvexHull
 
@@ -51,14 +52,19 @@ class StellaratorDesign:
         self.smin = 0.02
         self.smax = 1.0
         self.len_B_field_out = self.ns_B * self.ntheta_B * self.nzeta_B
-        self.mirror_target = 1.35
+        self.mirror_target = 1.5  # XXX original value was 1.5
         self.eps_B = (self.mirror_target - 1.0) / (self.mirror_target + 1.0)
-        self.B_upper_limit = (
+
+        # B field constraints
+        fudge_factor = 0.0  # fudge factor for B field constraints
+        self.B_upper_limit = (1.0 - fudge_factor) * (
             self.target_volavgB * (1 + self.eps_B) * np.ones(self.len_B_field_out)
         )  # upper bound, eq. 14
-        self.B_lower_limit = (
+        self.B_lower_limit = (1.0 + fudge_factor) * (
             self.target_volavgB * (1 - self.eps_B) * np.ones(self.len_B_field_out)
         )  # lower bound, eq. 14
+        self.torch_B_upper_limit = from_numpy(self.B_upper_limit)
+        self.torch_B_lower_limit = from_numpy(self.B_lower_limit)
 
         if testing:
             # Note absolute path
@@ -130,6 +136,7 @@ class StellaratorDesign:
 
         return res
 
+    # TODO: return to see if cache works
     # @cache
     def compute_B_field_vmec(self, x: np.ndarray, verbose: bool = False) -> np.ndarray:
         """
@@ -243,12 +250,13 @@ class StellaratorDesign:
         raise DeprecationWarning("This function is not used anymore.")
 
         # Compute B field for all points in X
-        B_x = from_numpy(np.vstack([design.compute_B_field_vmec(x) for x in train_X]))
-
-        B_lower_diff = B_x - self.B_lower_limit  # >= 0
-        B_upper_diff = self.B_upper_limit - B_x  # >= 0
-
-        return stack((B_lower_diff, B_upper_diff), dim=-1).min(-1).values
+        B_x = from_numpy(np.vstack([self.compute_B_field_vmec(x) for x in X]))
+        B_lower_diff = B_x - self.torch_B_lower_limit  # >= 0
+        B_upper_diff = self.torch_B_upper_limit - B_x  # >= 0
+        # Stack the constraints
+        constraints = stack([B_lower_diff, B_upper_diff], dim=-1)
+        # Get the minimum value across all constraints for each point
+        return torch_min(constraints, dim=-1).values
 
     def calculate_hull_bounds(self, train_X: Tensor) -> Tensor:
         """
@@ -294,13 +302,10 @@ class StellaratorDesign:
         Tensor
             Bounds for the Fourier coefficients
         """
-
         # Compute min and max for each dimension
         min_values = train_X.min(dim=0)
         max_values = train_X.max(dim=0)
-
-        # Add 10% slack to the bounds
-        return stack([0.9 * min_values.values, 1.1 * max_values.values])  # 2 x d
+        return stack([min_values.values, max_values.values])  # 2 x d
 
     def get_init_BO_params(
         self, input_files: str | list[str]
@@ -371,10 +376,8 @@ class StellaratorDesign:
             assert self.d == train_X.shape[1]  # Dimension of the input space (# of Fourier coefficients)
 
         bounds = self.calculate_bounds(train_X)
-        constraints = self.acqf_nonlinear_inequality_constraints()
-        # constraints = self.compound_nonlinear_constraint
 
-        return train_X, train_Y, bounds, constraints
+        return train_X, train_Y, bounds
 
 
 if __name__ == "__main__":
@@ -384,4 +387,4 @@ if __name__ == "__main__":
         if filename.startswith("input.nfp4"):
             vmec_input_files.append(os.path.join(directory, filename))
     design = StellaratorDesign()
-    train_X, train_Y, bounds, constraints = design.get_init_BO_params(vmec_input_files)
+    train_X, train_Y, bounds = design.get_init_BO_params(vmec_input_files)
