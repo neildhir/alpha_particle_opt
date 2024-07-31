@@ -96,8 +96,8 @@ def run(
 
     # Save the results and found points with a unique name
     results = {
-        "train_X": train_X,
-        "train_Y": train_Y,
+        "train_X": train_X,  # Fourier coefficients
+        "train_Y": train_Y,  # Expected energy loss
         "model_state_dict": model.state_dict(),
         "mll_state_dict": mll.state_dict(),
     }
