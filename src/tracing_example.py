@@ -1,5 +1,6 @@
 import os
 import sys
+import glob
 
 sys.path.insert(0, os.getcwd())
 from mpi4py import MPI
@@ -52,7 +53,7 @@ class StellaratorDesign:
         self.smin = 0.02
         self.smax = 1.0
         self.len_B_field_out = self.ns_B * self.ntheta_B * self.nzeta_B
-        self.mirror_target = 1.5  # XXX original value was 1.5
+        self.mirror_target = 1.5  # XXX original value was 1.35
         self.eps_B = (self.mirror_target - 1.0) / (self.mirror_target + 1.0)
 
         # B field constraints
@@ -137,7 +138,7 @@ class StellaratorDesign:
         return res
 
     # TODO: return to see if cache works
-    # @cache
+    @cache
     def compute_B_field_vmec(self, x: np.ndarray, verbose: bool = False) -> np.ndarray:
         """
         Use VMEC to compute the |B| field.
@@ -164,7 +165,23 @@ class StellaratorDesign:
 
         return modB
 
-    def B_lower_constraint(self, x: np.ndarray) -> np.ndarray:
+    def _clean_up_vmec_rubbish(self) -> None:
+        """
+        Remove VMEC-generated files.
+        """
+        # List of file patterns to remove
+        file_patterns = ["fort.9", "parvmecinfo.txt", "threed1.*", "wout_*", "input.*_000_*"]
+
+        # Iterate over each pattern and remove matching files
+        for pattern in file_patterns:
+            for file in glob.glob(pattern):
+                try:
+                    os.remove(file)
+                    # print(f"Removed: {file}")
+                except OSError as e:
+                    print(f"Error removing file {file}: {e}")
+
+    def B_lower_constraint(self, x: np.ndarray) -> Tensor:
         """
         Compute the difference between B(x) and B_lb. To be valid should be smaller or equal to zero.
 
@@ -178,7 +195,7 @@ class StellaratorDesign:
         np.ndarray
             Difference between B(x) and B_lb
         """
-        return self.compute_B_field_vmec(x) - self.B_lower_limit  # >= 0
+        return from_numpy(self.compute_B_field_vmec(x) - self.B_lower_limit)  # >= 0
 
     def B_upper_constraint(self, x: np.ndarray) -> np.ndarray:
         """
@@ -194,7 +211,7 @@ class StellaratorDesign:
         np.ndarray
             Difference between B_ub and B(x)
         """
-        return self.B_upper_limit - self.compute_B_field_vmec(x)  # >= 0
+        return from_numpy(self.B_upper_limit - self.compute_B_field_vmec(x))  # >= 0
 
     def acqf_nonlinear_inequality_constraints(self) -> list[tuple[callable, bool]]:
         """
@@ -204,7 +221,10 @@ class StellaratorDesign:
         ----------
         [1] Bindel, David, Matt Landreman, and Misha Padidar. "Direct optimization of fast-ion confinement in stellarators." Plasma Physics and Controlled Fusion 65.6 (2023): 065012.
         """
-        return [(self.B_lower_limit, True), (self.B_upper_limit, True)]
+        return [
+            (self.B_lower_constraint, True),
+            (self.B_upper_constraint, True),
+        ]
 
     def compound_nonlinear_constraint(self, X: Tensor) -> Tensor:
         """
@@ -247,7 +267,6 @@ class StellaratorDesign:
         Tensor
             Valid points that satisfy the constraints
         """
-        raise DeprecationWarning("This function is not used anymore.")
 
         # Compute B field for all points in X
         B_x = from_numpy(np.vstack([self.compute_B_field_vmec(x) for x in X]))
@@ -325,7 +344,8 @@ class StellaratorDesign:
         """
 
         try:
-            bo_params = load("bo_params.pth")
+            # Using absolute path for testing
+            bo_params = load("/Users/z004mktz/Code/fusion/alpha_particle_opt/src/bo_params.pth")
             train_X = bo_params["train_X"]
             train_Y = bo_params["train_Y"]
 
@@ -376,6 +396,7 @@ class StellaratorDesign:
             assert self.d == train_X.shape[1]  # Dimension of the input space (# of Fourier coefficients)
 
         bounds = self.calculate_bounds(train_X)
+        self._clean_up_vmec_rubbish()
 
         return train_X, train_Y, bounds
 

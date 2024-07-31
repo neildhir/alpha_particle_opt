@@ -1,6 +1,5 @@
 from os import environ
 
-from bo.initialisers import gen_batch_initial_conditions_nonlinear
 from torch import Tensor, vstack
 from botorch.fit import fit_gpytorch_mll
 from botorch.acquisition import ExpectedImprovement
@@ -8,7 +7,8 @@ import time
 from functools import partial
 
 from tracing_example import StellaratorDesign
-from bo.bayes_opt import build_surrogate_model, optimize_acqf_and_get_new_point
+from src.bo.initialisers import gen_batch_initial_conditions_nonlinear
+from src.bo.bayes_opt import build_surrogate_model, optimize_acqf_and_get_new_point
 import os
 
 SMOKE_TEST = environ.get("SMOKE_TEST")  # TODO: finish this
@@ -103,8 +103,8 @@ if __name__ == "__main__":
     for filename in os.listdir(directory):
         if filename.startswith("input.nfp4"):
             vmec_input_files.append(os.path.join(directory, filename))
-    design = StellaratorDesign()
-    train_X, train_Y, bounds, constraints = design.get_init_BO_params(vmec_input_files)
+    design = StellaratorDesign(testing=True)
+    train_X, train_Y, bounds = design.get_init_BO_params(vmec_input_files)
 
     SMOKE_TEST = True
 
@@ -115,6 +115,6 @@ if __name__ == "__main__":
         train_Y=train_Y,
         bounds=bounds,
         ic_nonlinear_inequality_constraints=design.compound_nonlinear_constraint_differentiable,  # Compound intra-point constraint
-        acqf_nonlinear_inequality_constraints=design.acqf_nonlinear_inequality_constraints,  # Intra-point constraints
+        acqf_nonlinear_inequality_constraints=design.acqf_nonlinear_inequality_constraints(),  # Intra-point constraints
         SMOKE_TEST=SMOKE_TEST,
     )

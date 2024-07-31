@@ -76,8 +76,6 @@ References
     expensive black-box optimization, Engineering Optimization, 2013.
 """
 
-from __future__ import annotations
-
 import warnings
 from math import ceil
 from typing import Dict, List, Optional, Tuple, Union
@@ -85,7 +83,7 @@ from typing import Dict, List, Optional, Tuple, Union
 import torch
 from botorch import settings
 from botorch.acquisition.acquisition import AcquisitionFunction
-from botorch.acquisition.utils import is_nonnegative
+from botorch.optim.initializers import is_nonnegative
 from botorch.exceptions.errors import (
     BotorchTensorDimensionError,
     UnsupportedError,
@@ -226,6 +224,7 @@ def gen_batch_initial_conditions_nonlinear(
                     .cpu()
                 )
 
+                # Non-linear constraint calculations
                 X_rnd = X_rnd.reshape(-1, ndims)
                 indices = torch.where(nonlinear_constraint(X_rnd) >= 0)[0].unique()
                 all_points = torch.cat([all_points, X_rnd[indices]], axis=0)
@@ -240,9 +239,10 @@ def gen_batch_initial_conditions_nonlinear(
                         "revisiting the parameters of this constraint, "
                         "as it appears hard to satisfy it."
                     )
+
             X_rnd = all_points[:need, :].reshape(num_restarts, q, ndims)
 
-            # sample points around best
+            # Sample points around best
             if sample_around_best:
                 X_best_rnd = sample_points_around_best(
                     acq_function=acq_function,
@@ -260,6 +260,7 @@ def gen_batch_initial_conditions_nonlinear(
                         ],
                         dim=0,
                     )
+
             X_rnd = fix_features(X_rnd, fixed_features=fixed_features)
             with torch.no_grad():
                 if batch_limit is None:
@@ -653,3 +654,6 @@ def sample_perturbed_subset_dims(
     # Create candidate points
     X_cand[mask] = pert[mask]
     return X_cand
+
+
+# TODO: write updated version using the latest BoTorch code
