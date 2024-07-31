@@ -191,7 +191,7 @@ class StellaratorDesign:
         Returns
         -------
         np.ndarray
-            Difference between B(x) and B_lb
+            Difference between B(x) and the lower B field limit
         """
         return from_numpy(self.compute_B_field_vmec(x) - self.B_lower_limit)  # >= 0
 

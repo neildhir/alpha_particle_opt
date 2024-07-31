@@ -1,6 +1,6 @@
 from os import environ
 
-from torch import Tensor, vstack
+from torch import Tensor, vstack, save
 from botorch.fit import fit_gpytorch_mll
 from botorch.acquisition import ExpectedImprovement
 import time
@@ -80,7 +80,9 @@ def run(
         train_Y = vstack([train_Y, new_f])
 
         # Re-build model with new data, ready for fitting on next iteration
-        mll, model = build_surrogate_model(train_X, train_Y, bounds)  # TODO: with state-dict here?
+        mll, model = build_surrogate_model(
+            train_X, train_Y, bounds
+        )  # TODO: we can prime the model with the state_dict insted of re-building it each time, faster.
 
         t1 = time.monotonic()
         best_f = train_Y.min().item()
@@ -92,8 +94,15 @@ def run(
         else:
             print(".", end="")
 
-    # TODO: save and load data/model through state_dict once the model is trained
-    # TODO: save results module
+    # Save the results and found points with a unique name
+    results = {
+        "train_X": train_X,
+        "train_Y": train_Y,
+        "model_state_dict": model.state_dict(),
+        "mll_state_dict": mll.state_dict(),
+    }
+    timestamp = time.strftime("%Y%m%d%H%M%S")  # e.g. 20210909123456
+    save(results, f"optimization_results_{timestamp}.pth")
 
 
 if __name__ == "__main__":
