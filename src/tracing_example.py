@@ -137,7 +137,6 @@ class StellaratorDesign:
 
         return res
 
-    # TODO: return to see if cache works
     @cache
     def compute_B_field_vmec(self, x: np.ndarray, verbose: bool = False) -> np.ndarray:
         """
@@ -161,7 +160,7 @@ class StellaratorDesign:
             print("B-interval:", np.min(modB), np.max(modB))
             print("Mirror Ratio:", np.max(modB) / np.min(modB))
 
-        # TODO: write snippet here which removes all VMEC-generated rubbish.
+        self._clean_up_vmec_rubbish()
 
         return modB
 
@@ -177,7 +176,6 @@ class StellaratorDesign:
             for file in glob.glob(pattern):
                 try:
                     os.remove(file)
-                    # print(f"Removed: {file}")
                 except OSError as e:
                     print(f"Error removing file {file}: {e}")
 
@@ -226,33 +224,6 @@ class StellaratorDesign:
             (self.B_upper_constraint, True),
         ]
 
-    def compound_nonlinear_constraint(self, X: Tensor) -> Tensor:
-        """
-        Function to compute the compound nonlinear constraint for the acquisition function.
-
-        Parameters
-        ----------
-        X : Tensor
-            2D array of candidate Fourier coefficients (candidates x # Fourier coefficients)
-
-        Returns
-        -------
-        Tensor
-            Valid points that satisfy the constraints
-        """
-        raise DeprecationWarning("This function is not used anymore.")
-
-        # Compute B field for all points in X
-        B_x = np.array([self.compute_B_field_vmec(x) for x in X.numpy()])
-        # Create a mask for points that satisfy the constraints
-        mask = np.logical_and(self.B_lower_limit <= B_x, B_x <= self.B_upper_limit)
-        # Find points where all constraints are satisfied
-        all_constraints_satisfied = np.all(mask, axis=1)
-        # Filter valid points
-        valid_points = X[all_constraints_satisfied]
-
-        return from_numpy(valid_points)
-
     def compound_nonlinear_constraint_differentiable(self, X: Tensor) -> Tensor:
         """
         Function to compute the compound nonlinear constraint for the acquisition function.
@@ -276,36 +247,6 @@ class StellaratorDesign:
         constraints = stack([B_lower_diff, B_upper_diff], dim=-1)
         # Get the minimum value across all constraints for each point
         return torch_min(constraints, dim=-1).values
-
-    def calculate_hull_bounds(self, train_X: Tensor) -> Tensor:
-        """
-        Function calculates the bounds for the input x based on the training data. Done by calculating the convex closure (convex hull) of all the input Fourier coefficients. This is a bit hand-wavy, but it's a start - the true region is almost surely not convex.
-
-        Parameters
-        ----------
-        train_X : Tensor
-            Input
-
-        Returns
-        -------
-        Tensor
-            Bounds for the Fourier coefficients
-        """
-
-        # Compute the convex hull
-        hull = ConvexHull(train_X)
-
-        # Get the vertices of the convex hull
-        hull_vertices = train_X[hull.vertices]
-
-        # Compute min and max for each dimension
-        min_values = np.min(hull_vertices, axis=0)
-        max_values = np.max(hull_vertices, axis=0)
-
-        assert len(min_values) == self.d
-        assert len(max_values) == self.d
-
-        return stack([tensor(min_values), tensor(max_values)])  # 2 x d
 
     def calculate_bounds(self, train_X: Tensor) -> Tensor:
         """
