@@ -81,8 +81,8 @@ def optimize_acqf_and_get_new_point(
     [1] Bindel, David, Matt Landreman, and Misha Padidar. "Direct optimization of fast-ion confinement in stellarators." Plasma Physics and Controlled Fusion 65.6 (2023): 065012.
     """
 
-    NUM_RESTARTS = 2 if SMOKE_TEST else 8
-    RAW_SAMPLES = 16 if SMOKE_TEST else 128
+    NUM_RESTARTS = 4 if SMOKE_TEST else 8
+    RAW_SAMPLES = 32 if SMOKE_TEST else 128
 
     # Initial condition (IC) generation is a fairly unsupported feature in BoTorch (at the time or writing). For details see: https://github.com/pytorch/botorch/issues/1572
 

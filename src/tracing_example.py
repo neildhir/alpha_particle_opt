@@ -11,6 +11,7 @@ from functools import cache
 from scipy.spatial import ConvexHull
 
 from src.trace.trace_boozer import TraceBoozer
+from src.utils.misc import clean_up_vmec_rubbish
 
 
 class StellaratorDesign:
@@ -53,15 +54,15 @@ class StellaratorDesign:
         self.smin = 0.02
         self.smax = 1.0
         self.len_B_field_out = self.ns_B * self.ntheta_B * self.nzeta_B
-        self.mirror_target = 1.5  # XXX original value was 1.35
+        self.mirror_target = 2.0  # XXX original value was 1.35
         self.eps_B = (self.mirror_target - 1.0) / (self.mirror_target + 1.0)
 
         # B field constraints
         fudge_factor = 0.0  # fudge factor for B field constraints
-        self.B_upper_limit = (1.0 - fudge_factor) * (
+        self.B_upper_limit = (1.0 + fudge_factor) * (
             self.target_volavgB * (1 + self.eps_B) * np.ones(self.len_B_field_out)
         )  # upper bound, eq. 14
-        self.B_lower_limit = (1.0 + fudge_factor) * (
+        self.B_lower_limit = (1.0 - fudge_factor) * (
             self.target_volavgB * (1 - self.eps_B) * np.ones(self.len_B_field_out)
         )  # lower bound, eq. 14
         self.torch_B_upper_limit = from_numpy(self.B_upper_limit)
@@ -160,24 +161,9 @@ class StellaratorDesign:
             print("B-interval:", np.min(modB), np.max(modB))
             print("Mirror Ratio:", np.max(modB) / np.min(modB))
 
-        self._clean_up_vmec_rubbish()
+        clean_up_vmec_rubbish()
 
         return modB
-
-    def _clean_up_vmec_rubbish(self) -> None:
-        """
-        Remove VMEC-generated files.
-        """
-        # List of file patterns to remove
-        file_patterns = ["fort.9", "parvmecinfo.txt", "threed1.*", "wout_*", "input.*_000_*"]
-
-        # Iterate over each pattern and remove matching files
-        for pattern in file_patterns:
-            for file in glob.glob(pattern):
-                try:
-                    os.remove(file)
-                except OSError as e:
-                    print(f"Error removing file {file}: {e}")
 
     def B_lower_constraint(self, x: np.ndarray) -> Tensor:
         """
@@ -337,7 +323,7 @@ class StellaratorDesign:
             assert self.d == train_X.shape[1]  # Dimension of the input space (# of Fourier coefficients)
 
         bounds = self.calculate_bounds(train_X)
-        self._clean_up_vmec_rubbish()
+        clean_up_vmec_rubbish()
 
         return train_X, train_Y, bounds
 
