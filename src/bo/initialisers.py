@@ -83,7 +83,7 @@ from math import ceil
 from typing import Dict, List, Optional, Tuple, Union
 
 import torch
-from botorch import settings
+from botorch import manual_seed, settings
 from botorch.acquisition.acquisition import AcquisitionFunction
 from botorch.optim.initializers import is_nonnegative
 from botorch.exceptions.errors import (
@@ -851,3 +851,64 @@ def gen_batch_initial_conditions_with_nonlinear_constraints(
         BadInitialCandidatesWarning,
     )
     return batch_initial_conditions
+
+
+def sample_q_batches_from_polytope(
+    n: int,
+    q: int,
+    bounds: Tensor,
+    n_burnin: int,
+    n_thinning: int,
+    seed: int,
+    inequality_constraints: Optional[List[Tuple[Tensor, Tensor, float]]] = None,
+    equality_constraints: Optional[List[Tuple[Tensor, Tensor, float]]] = None,
+) -> Tensor:
+    r"""Samples `n` q-baches from a polytope of dimension `d`.
+
+    Args:
+        n: Number of q-batches to sample.
+        q: Number of samples per q-batch
+        bounds: A `2 x d` tensor of lower and upper bounds for each column of `X`.
+        n_burnin: The number of burn-in samples for the Markov chain sampler.
+        n_thinning: The amount of thinning. The sampler will return every
+            `n_thinning` sample (after burn-in).
+        seed: The random seed.
+        inequality_constraints: A list of tuples (indices, coefficients, rhs),
+            with each tuple encoding an inequality constraint of the form
+            `\sum_i (X[indices[i]] * coefficients[i]) >= rhs`.
+        equality_constraints: A list of tuples (indices, coefficients, rhs),
+            with each tuple encoding an inequality constraint of the form
+            `\sum_i (X[indices[i]] * coefficients[i]) = rhs`.
+
+    Returns:
+        A `n x q x d`-dim tensor of samples.
+    """
+
+    # check if inter-point constraints are present
+    inter_point = any(
+        len(indices.shape) > 1
+        for constraints in (inequality_constraints or [], equality_constraints or [])
+        for indices, _, _ in constraints
+    )
+
+    if inter_point:
+        samples = get_polytope_samples(
+            n=n,
+            bounds=torch.hstack([bounds for _ in range(q)]),
+            inequality_constraints=transform_constraints(constraints=inequality_constraints, q=q, d=bounds.shape[1]),
+            equality_constraints=transform_constraints(constraints=equality_constraints, q=q, d=bounds.shape[1]),
+            seed=seed,
+            n_burnin=n_burnin,
+            n_thinning=n_thinning * q,
+        )
+    else:
+        samples = get_polytope_samples(
+            n=n * q,
+            bounds=bounds,
+            inequality_constraints=inequality_constraints,
+            equality_constraints=equality_constraints,
+            seed=seed,
+            n_burnin=n_burnin,
+            n_thinning=n_thinning,
+        )
+    return samples.view(n, q, -1).cpu()
