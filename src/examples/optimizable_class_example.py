@@ -2,7 +2,7 @@ import numpy as np
 from simsopt.mhd import Vmec
 from simsopt.util import MpiPartition, proc0_print
 from src.sample.particle_sampler import ParticleSampler
-from src.trace.objectives_and_constraints import TraceBoozer, FieldStrength, prepare_config
+from src.trace.objectives_and_constraints import FastIonLoss, FieldStrength, prepare_config
 
 vmec_input = "../vmec_input_files/nfp4/ours/input.nfp4_QH_cold_high_res_phase_one_mirror_1.35_aspect_7.0_iota_0.89"
 max_mode = 3
@@ -23,7 +23,7 @@ proc0_print(fs.mirror_ratio())
 
 # check particle tracing
 sampler = ParticleSampler(nfp, s_label=0.25, n_particles = 20).sample_surface
-tracer = TraceBoozer(
+tracer = FastIonLoss(
     vmec,
     mpi,
     sampler,

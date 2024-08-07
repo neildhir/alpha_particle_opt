@@ -49,7 +49,7 @@ def prepare_config(vmec, max_mode, major_radius, aspect_target, target_volavgB):
     return vmec
 
 
-class TraceBoozer(Optimizable):
+class FastIonLoss(Optimizable):
     """
     An optimizable class for minimizing fast ion losses.
     """
@@ -185,7 +185,7 @@ class TraceBoozer(Optimizable):
 
         n_particles = len(vpar_inits)
         tmax = self.tmax
-        fail_value = -np.inf * np.ones(n_particles)
+        fail_value = np.zeros(n_particles)
 
         # check cache
         if not self.need_to_run_code:
@@ -246,13 +246,32 @@ class TraceBoozer(Optimizable):
         return confinement_times, is_success
     
     def energy_loss(self):
+        """
+        Compute the energy lost due to electron collisions.
+        This function can be used for optimization.
+            
+        If VMEC fails, 
+            return the maximum value: 3.5
+        Otherwise, 
+            return E[3.5 * np.exp(-2 * c_times / tmax)]
+        """
         c_times, is_success = self.compute_confinement_times()
         feat = 3.5 * np.exp(-2 * c_times / self.tmax)
-        return np.mean(feat), is_success
+        return np.mean(feat)
     
     def loss_fraction(self):
+        """
+        Compute the loss fraction
+            P( c_times < tmax).
+        This function can be used for optimization.
+            
+        If VMEC fails, 
+            return the maximum value: 1.0
+        Otherwise, 
+            return the loss fraction
+        """
         c_times, is_success = self.compute_confinement_times()
-        return np.mean(c_times <  self.tmax), is_success
+        return np.mean(c_times <  self.tmax)
 
 
 
@@ -295,6 +314,17 @@ class FieldStrength(Optimizable):
         """
         B, is_success = self.compute()
         return np.max(B)/np.min(B), is_success
+    
+    def modB(self):
+        """
+        Compute the field strength. This function can be used for optimization.
+
+        return
+        modB: (ns*ntheta*nphi, ) array of modB values on the grid. If VMEC fails
+            then the array is populated with zeros. 
+        """
+        B, is_success = self.compute()
+        return B*is_success
 
     def compute(self) -> np.ndarray:
         """
@@ -304,7 +334,7 @@ class FieldStrength(Optimizable):
 
         return: modB, is_success
         modB: (ns*ntheta*nphi, ) array of modB values on the grid. If is_success
-            is False, then the array if populated with zeros. 
+            is False, then the array is populated with zeros. 
         is_success: bool, whether the computation is a success or not.
         """
         is_success = True
@@ -328,7 +358,3 @@ class FieldStrength(Optimizable):
         # return a 1d array
         modB = data.modB.flatten()
         return modB, is_success
-
-
-
-# if __name__ == "__main__":
