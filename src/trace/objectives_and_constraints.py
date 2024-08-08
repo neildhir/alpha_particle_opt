@@ -49,37 +49,26 @@ def prepare_config(vmec, max_mode, major_radius, aspect_target, target_volavgB):
     return vmec
 
 
-class FastIonLoss(Optimizable):
+class Booz(Optimizable):
     """
-    An optimizable class for minimizing fast ion losses.
+    Optimizable class to wrap the boozXform computation. This facilitates
+    caching natively through simsopt, and allows for heirarchical
+    treatment of variables.
     """
-
     def __init__(
         self,
         vmec,
-        mpi,
-        sampler,
-        tmax: float = 1e-4,
-        tracing_tol: float = 1e-8,
         interpolant_degree: int = 3,
         interpolant_level: int = 8,
         bri_mpol: int = 32,
         bri_ntor: int = 32,
     ) -> None:
         """
-        Initialize the TraceBoozer class.
+        Initialize the Booz class.
 
         Parameters:
         ----------
         vmec: an instance of Vmec class.
-        mpi: an instance of the MpiPartition class
-        sampler: a function handle to sample particles. 
-            ex.
-            sampler = ParticleSampler.sample_surface or 
-            sampler = FluxSurfaceGrid.surface_grid or 
-        tmax: maximum tracing time in seconds, e.g. 1e-3.
-        tracing_tol : float, default 1e-8
-            Tolerance for determining tracing accuracy.
         interpolant_degree : int, default 3
             Degree of polynomial interpolants for field interpolation.
             1: fast but inaccurate, 3: slower but more accurate.
@@ -91,10 +80,6 @@ class FastIonLoss(Optimizable):
             Lower values (e.g., 16) are faster.
         """
 
-        self.mpi = mpi
-        self.sampler = sampler
-        self.tmax = tmax
-        self.tracing_tol: float = tracing_tol
         self.interpolant_degree: int = interpolant_degree
         self.interpolant_level: int = interpolant_level
         self.bri_mpol: int = bri_mpol
@@ -113,15 +98,16 @@ class FastIonLoss(Optimizable):
         """
         self.need_to_run_code = True
     
-    def cache_results(self, confinement_times, is_success):
+    def cache_results(self, field, bri, is_success):
         """
         Cache the tracing results.
         """
-        self.confinement_times = confinement_times
+        self.field = field
+        self.bri = bri
         self.is_success = is_success
         self.need_to_run_code = False
 
-    def compute_boozer_field(self):
+    def compute(self):
         """
         Use BoozXForm to compute the magnetic field in Boozer coordinates
         from a VMEC result.
@@ -131,6 +117,10 @@ class FastIonLoss(Optimizable):
         bri: boozXform radial interpolant. If VMEC fails, this will be None.
         is_success: bool, True if VMEC succeeded.
         """
+        # check cache
+        if not self.need_to_run_code:
+            return self.field, self.bri, self.is_success
+        
         is_success = True
 
         try:
@@ -162,11 +152,66 @@ class FastIonLoss(Optimizable):
         )
 
         # cache results
-        self.field = field
-        self.bri = bri
+        self.cache_results(field, bri, is_success)
 
         return field, bri, is_success
 
+
+class FastIonLoss(Optimizable):
+    """
+    An optimizable class for minimizing fast ion losses.
+    """
+
+    def __init__(
+        self,
+        booz,
+        mpi,
+        sampler,
+        tmax: float = 1e-4,
+        tracing_tol: float = 1e-8,
+    ) -> None:
+        """
+        Initialize the FastIonLoss class.
+
+        Parameters:
+        ----------
+        booz: an instance of Booz class.
+        mpi: an instance of the MpiPartition class
+        sampler: a function handle to sample particles. 
+            ex.
+            sampler = ParticleSampler.sample_surface or 
+            sampler = FluxSurfaceGrid.surface_grid or 
+        tmax: maximum tracing time in seconds, e.g. 1e-3.
+        tracing_tol : float, default 1e-8
+            Tolerance for determining tracing accuracy.
+        """
+
+        self.mpi = mpi
+        self.sampler = sampler
+        self.tmax = tmax
+        self.tracing_tol: float = tracing_tol
+        self.fail_value = 0.0
+
+        # for caching
+        self.need_to_run_code = True
+
+        self.booz = booz
+        super().__init__(depends_on=[booz])
+
+    def recompute_bell(self, parent=None):
+        """
+        This function will get called any time any of the DOFs of the
+        parent class (booz/vmec) change.
+        """
+        self.need_to_run_code = True
+    
+    def cache_results(self, confinement_times, is_success):
+        """
+        Cache the tracing results.
+        """
+        self.confinement_times = confinement_times
+        self.is_success = is_success
+        self.need_to_run_code = False
 
     def compute_confinement_times(self):
         """
@@ -178,28 +223,29 @@ class FastIonLoss(Optimizable):
             if the boozXform or vmec fail, then the array is filled
             with -np.inf.
         """
+        # check cache
+        if not self.need_to_run_code:
+            return self.confinement_times, self.is_success
+
         is_success = True
+
+        field, bri, is_success = self.booz.compute()
 
         # get initial particle states
         stz_inits, vpar_inits = self.sampler()
 
         n_particles = len(vpar_inits)
-        tmax = self.tmax
-        fail_value = np.zeros(n_particles)
-
-        # check cache
-        if not self.need_to_run_code:
-            return self.confinement_times, is_success
-
-        field, bri, is_success = self.compute_boozer_field()
+        fail_value = self.fail_value*np.ones(n_particles)
 
         if not is_success:
-            # VMEC failure  
+            # Booz/VMEC failure  
             confinement_times = fail_value
             self.cache_results(confinement_times, is_success)
             return fail_value, is_success
 
         stopping_criteria = [MaxToroidalFluxStoppingCriterion(0.99), MinToroidalFluxStoppingCriterion(0.01)]
+
+        tmax = self.tmax
 
         try:
             res_tys, res_zeta_hits = trace_particles_boozer(
@@ -247,7 +293,7 @@ class FastIonLoss(Optimizable):
     
     def energy_loss(self):
         """
-        Compute the energy lost due to electron collisions.
+        Compute the energy lost due to background electron collisions.
         This function can be used for optimization.
             
         If VMEC fails, 
@@ -272,7 +318,19 @@ class FastIonLoss(Optimizable):
         """
         c_times, is_success = self.compute_confinement_times()
         return np.mean(c_times <  self.tmax)
-
+    
+    def mean_confinement_time(self):
+        """
+        Compute the mean confinement time.
+        This function can be used for optimization.
+            
+        If VMEC fails, 
+            return 0.0
+        Otherwise, 
+            return E[confinement_times]
+        """
+        c_times, is_success = self.compute_confinement_times()
+        return np.mean(c_times)
 
 
 class FieldStrength(Optimizable):
@@ -304,16 +362,36 @@ class FieldStrength(Optimizable):
         self.smax = smax
         self.output_size = ns*ntheta*nphi
 
+        self.fail_value = np.zeros(self.output_size)
+
+        self.need_to_run_code = True
+
         self.vmec = vmec
         Optimizable.__init__(self, depends_on=[vmec])
+
+    def recompute_bell(self, parent=None):
+        """
+        This function will get called any time any of the DOFs of the
+        parent class (vmec) change.
+        """
+        self.need_to_run_code = True
+    
+    def cache_results(self, modB_cache, is_success):
+        """
+        Cache the tracing results.
+        """
+        self.modB_cache = modB_cache
+        self.is_success = is_success
+        self.need_to_run_code = False
 
     def mirror_ratio(self):
         """
         Return the mirror ratio,
             max(B)/min(B).
+        if VMEC fails, returns 0
         """
         B, is_success = self.compute()
-        return np.max(B)/np.min(B), is_success
+        return np.max(B)/np.min(B)*is_success
     
     def modB(self):
         """
@@ -337,7 +415,9 @@ class FieldStrength(Optimizable):
             is False, then the array is populated with zeros. 
         is_success: bool, whether the computation is a success or not.
         """
-        is_success = True
+        # check cache
+        if not self.need_to_run_code:
+            return self.modB_cache, self.is_success
 
         # try to run vmec
         try:
@@ -345,7 +425,9 @@ class FieldStrength(Optimizable):
         except:
             # VMEC failure!
             is_success = False
-            return np.zeros(self.output_size), is_success
+            modB = self.fail_value
+            self.cache_results(modB, is_success)
+            return modB, is_success
 
         nfp = self.vmec.wout.nfp
         s = np.linspace(self.smin, self.smax, self.ns)
@@ -357,4 +439,7 @@ class FieldStrength(Optimizable):
 
         # return a 1d array
         modB = data.modB.flatten()
+        is_success = True
+        self.cache_results(modB, is_success)
+
         return modB, is_success

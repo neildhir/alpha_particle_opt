@@ -9,21 +9,18 @@ from simsopt.objectives import ConstrainedProblem
 from simsopt.solve import constrained_mpi_solve
 from simsopt.util import MpiPartition, proc0_print
 
-from src.sample.particle_sampler import ParticleSampler
-from src.trace.objectives_and_constraints import FastIonLoss, FieldStrength, prepare_config
+from src.sample.particle_sampler import NonUniformSampler
+from src.trace.objectives_and_constraints import Booz, FastIonLoss, FieldStrength, prepare_config
 
 """
-Optimize a VMEC equilibrium for quasi-helical symmetry (M=1, N=-1)
-throughout the volume.
+Solve the particle tracing problem.
 
-Solve as a constrained opt problem
-min QH symmetry error
+min_w E_x[EnergyLoss(w)]
 s.t. 
-  aspect ratio <= 8
-  -1.05 <= iota <= -1
+  B_lb <= B(x, w) <= B_ub
 
 Run with e.g.
-  mpiexec -n 48 constrained_optimization.py
+  mpiexec -n 48 optimization_example.py
 
 (Any number of processors will work.)
 """
@@ -37,9 +34,9 @@ aspect_target = 7.0
 major_radius = 1.7 * aspect_target
 target_volavgB = 1.0
 mirror_target = 1.35
-n_particles = 20
+n_particles = 2
 s_label = 0.25
-tmax= 1e-1
+tmax= 1e-4
 tracing_tol= 1e-8
 interpolant_degree=3
 interpolant_level=8
@@ -55,26 +52,25 @@ vmec = prepare_config(vmec, max_mode, major_radius, aspect_target, target_volavg
 vmec.run()
 nfp = vmec.wout.nfp
 
-# TODO: put bound constraints on the variables
+# (Optional) put bound constraints on the variables
 # n_dofs = len(vmec.surf.x)
 # vmec.surf.upper_bounds = 10*np.ones(n_dofs)
 # vmec.surf.lower_bounds = -5*np.ones(n_dofs)
 # surf.set_upper_bound("rc(1,0)", 1.0)
 
+# boozer field
+booz = Booz(vmec, bri_mpol=bri_mpol, bri_ntor=bri_ntor)
+
 # initialize a particle sampler
-sampler = ParticleSampler(nfp, s_label=s_label, n_particles = n_particles).sample_surface
+sampler = NonUniformSampler(mpi = mpi, nfp = nfp, s_label=s_label, n_particles=n_particles).sample_surface
 
 # objective
 tracer = FastIonLoss(
-    vmec,
-    mpi,
-    sampler,
+    booz=booz,
+    mpi=mpi,
+    sampler=sampler,
     tmax=tmax,
     tracing_tol=tracing_tol,
-    interpolant_degree=interpolant_degree,
-    interpolant_level=interpolant_level,
-    bri_mpol=bri_mpol,
-    bri_ntor=bri_ntor,
 )
 
 # constraint
@@ -114,8 +110,10 @@ def bo_solver(objective, x0, bounds, constraints, method, options):
 proc0_print("Running optimization")
 proc0_print("==================================================")
 
-proc0_print("Initial objective:", tracer.energy_loss())
-proc0_print("Initial mirror ratio:", fs.mirror_ratio())
+loss = tracer.energy_loss()
+proc0_print("Initial objective:", loss)
+mirror = fs.mirror_ratio()
+proc0_print("Initial mirror ratio:", mirror)
 
 # solve the problem
 constrained_mpi_solve(prob, mpi, opt_handle=bo_solver)
@@ -124,5 +122,7 @@ constrained_mpi_solve(prob, mpi, opt_handle=bo_solver)
 vmec.surf.x = prob.x
 proc0_print("")
 proc0_print(f"Completed optimization with max_mode ={max_mode}. ")
-proc0_print("objective:", tracer.energy_loss())
-proc0_print("mirror ratio:", fs.mirror_ratio())
+loss = tracer.energy_loss()
+proc0_print("Initial objective:", loss)
+mirror = fs.mirror_ratio()
+proc0_print("Initial mirror ratio:", mirror)
