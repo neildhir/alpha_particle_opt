@@ -65,6 +65,7 @@ Set `OMP_NUM_THREADS=1` to ensure that MPI is not slowed down by OpenMP.
     git checkout bo_branch
     ```
   Install any remaining python packages,
+  
     ```
     python -m pip install botorch
     conda install tqdm multipledispatch
