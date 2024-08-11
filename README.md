@@ -10,10 +10,10 @@ Navigate to `src/` then run `python run_one_replicate.py` to run the optimisatio
 
 Set `OMP_NUM_THREADS=1` to ensure that MPI is not slowed down by OpenMP.
 
-## Installation instructions for running the G2 cluster
+## Installation instructions for running on the G2 cluster
 1. Make a conda env 
   ```
-  conda create -n "particle_tracing_bo" python=3.3.0 ipython
+  conda create -n "particle_tracing_bo" python=3.8.0 ipython
   ```
   And activate it,
   ```
@@ -26,7 +26,7 @@ Set `OMP_NUM_THREADS=1` to ensure that MPI is not slowed down by OpenMP.
     git clone git@github.com:hiddenSymmetries/VMEC2000.git
     cd VMEC2000
     ```
-    Now install the necessary packages. I was able to get all of the packages i needed through `apt-get`. 
+    Now install the necessary packages.
     ```
     conda install numpy
     conda install cmake scikit-build ninja f90wrap
@@ -35,7 +35,7 @@ Set `OMP_NUM_THREADS=1` to ensure that MPI is not slowed down by OpenMP.
     ```
     export LD_LIBRARY_PATH=/home/map454/scalapack/usr/local/lib
     ```
-    Edit the `VMEC2000/cmake_config_file.json` file to look like,
+    Now edit the `VMEC2000/cmake_config_file.json` file to look like,
     ```
     {
     "cmake_args": [
@@ -52,7 +52,7 @@ Set `OMP_NUM_THREADS=1` to ensure that MPI is not slowed down by OpenMP.
     ```
     If the install fails, remove the `_skbuild` directory. Install whatever you need or adjust the `cmake_config_file.json` and try again.
 
-3. Install simsopt with any necessary MPI related modules, such as mpi4py. We are going to be using the `general_constrained_optimization` branch of my (Misha) fork.
+3. Install simsopt with any necessary MPI related modules, such as mpi4py. We are going to be using the `general_constrained_optimization` branch of my fork.
     ```
     git clone git@github.com:mishapadidar/simsopt.git
     pip install --user -e .[MPI]
@@ -63,6 +63,12 @@ Set `OMP_NUM_THREADS=1` to ensure that MPI is not slowed down by OpenMP.
     ```
     git clone git@github.com:neildhir/alpha_particle_opt.git
     git checkout bo_branch
+    ```
+  Install any remaining python packages,
+  
+    ```
+    python -m pip install botorch
+    conda install tqdm multipledispatch
     ```
 
 5. Add the repo to your `PYTHONPATH` so that the directory structure is recognized by python. Modify your `.bashrc` to contain the following line (replacing the path with the relevant one)`,
