@@ -64,6 +64,11 @@ Set `OMP_NUM_THREADS=1` to ensure that MPI is not slowed down by OpenMP.
     git clone git@github.com:neildhir/alpha_particle_opt.git
     git checkout bo_branch
     ```
+  Install any remaining python packages,
+    ```
+    python -m pip install botorch
+    conda install tqdm multipledispatch
+    ```
 
 5. Add the repo to your `PYTHONPATH` so that the directory structure is recognized by python. Modify your `.bashrc` to contain the following line (replacing the path with the relevant one)`,
     ```
