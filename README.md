@@ -15,7 +15,7 @@ Set `OMP_NUM_THREADS=1` to ensure that MPI is not slowed down by OpenMP.
   ```
   conda create -n "particle_tracing_bo" python=3.8.0 ipython
   ```
-  And activate it,
+  This will install using python 3.8. I haven't been able to get VMEC to install on G2 with any later versions of python. Note that this restricts the versions of some code we can use, such as botorch. Now activate the conda environement,
   ```
   conda activate particle_tracing_bo
   ```
@@ -48,7 +48,7 @@ Set `OMP_NUM_THREADS=1` to ensure that MPI is not slowed down by OpenMP.
     ```
     Finally do a `pip install`. 
     ```
-    python -m pip install . -v
+    pip install . -v
     ```
     If the install fails, remove the `_skbuild` directory. Install whatever you need or adjust the `cmake_config_file.json` and try again.
 
@@ -64,8 +64,7 @@ Set `OMP_NUM_THREADS=1` to ensure that MPI is not slowed down by OpenMP.
     git clone git@github.com:neildhir/alpha_particle_opt.git
     git checkout bo_branch
     ```
-  Install any remaining python packages,
-  
+   Install any remaining python packages,
     ```
     python -m pip install botorch
     conda install tqdm multipledispatch
@@ -80,4 +79,8 @@ Set `OMP_NUM_THREADS=1` to ensure that MPI is not slowed down by OpenMP.
 6. Set the following environment variable to ensure that MPI is not slowed down by OpenMP. Add the following command to your `~/.bashrc` or just run, 
     ```
     export OMP_NUM_THREADS=1
+    ```
+7. You won't be able to use import simsopt or VMEC on the G2 login nodes (I think the nodes may be too old). Instead you should log in to one of David's nodes or another node,
+    ```
+    srun  --pty /bin/bash
     ```
