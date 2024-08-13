@@ -11,6 +11,8 @@ from simsopt.util import MpiPartition, proc0_print
 
 from src.sample.particle_sampler import NonUniformSampler
 from src.trace.objectives_and_constraints import Booz, FastIonLoss, FieldStrength, prepare_config
+from src.bo.bo_solver import BoSolver
+
 
 """
 Solve the particle tracing problem.
@@ -25,10 +27,7 @@ Run with e.g.
 (Any number of processors will work.)
 """
 
-# initial configuration
-vmec_input = "../vmec_input_files/nfp4/ours/input.nfp4_QH_cold_high_res_phase_one_mirror_1.35_aspect_7.0_iota_0.89"
-
-# optimization variables
+# physics variables
 max_mode = 3
 aspect_target = 7.0
 major_radius = 1.7 * aspect_target
@@ -43,20 +42,32 @@ interpolant_level=8
 bri_mpol= 8
 bri_ntor = 8
 
+# BO variables
+max_iter = 10
+num_restarts = 2
+raw_samples = 32
+method = 'trust-constr'
+options={'maxiter':200}
+
+vmec_input_files = []
+directory = "../vmec_input_files/nfp4/ours"
+for filename in os.listdir(directory):
+    if filename.startswith("input.nfp4"):
+        vmec_input_files.append(os.path.join(directory, filename))
+# TODO: remove
+# vmec_input_files = vmec_input_files[:2]
+print(vmec_input_files)
+
 proc0_print("setting up problem")
 proc0_print("==================================================")
 
 mpi = MpiPartition(1)
-vmec = Vmec(vmec_input, mpi=mpi, keep_all_files=False, verbose=False)
+vmec = Vmec(vmec_input_files[0], mpi=mpi, keep_all_files=False, verbose=False)
 vmec = prepare_config(vmec, max_mode, major_radius, aspect_target, target_volavgB)
 vmec.run()
-nfp = vmec.wout.nfp
 
-# (Optional) put bound constraints on the variables
-# n_dofs = len(vmec.surf.x)
-# vmec.surf.upper_bounds = 10*np.ones(n_dofs)
-# vmec.surf.lower_bounds = -5*np.ones(n_dofs)
-# surf.set_upper_bound("rc(1,0)", 1.0)
+nfp = vmec.wout.nfp
+dim_x = len(vmec.surf.x)
 
 # boozer field
 booz = Booz(vmec, bri_mpol=bri_mpol, bri_ntor=bri_ntor)
@@ -73,39 +84,40 @@ tracer = FastIonLoss(
     tracing_tol=tracing_tol,
 )
 
-# constraint
+# initialize train_X and train_Y
+n_inputs = len(vmec_input_files)
+train_X = np.zeros((n_inputs, dim_x))
+train_Y = np.zeros((n_inputs, 1))
+for ii, ff in enumerate(vmec_input_files):
+    new_vmec = Vmec(ff, mpi=mpi, keep_all_files=False, verbose=False)
+    new_vmec = prepare_config(new_vmec, max_mode, major_radius, aspect_target, target_volavgB)
+    vmec.surf.x = new_vmec.surf.x
+    el = tracer.energy_loss()
+    train_X[ii] = vmec.surf.x
+    train_Y[ii] = el
+
+# bound constraints on the variables
+factor = 1.0
+vmec.surf.upper_bounds = np.max(train_X, axis=0)*factor
+vmec.surf.lower_bounds = np.min(train_X, axis=0)*factor
+
+
+# TODO: set up gradients of the field strength or switch to mean-cross sectional area constraint.
 fs = FieldStrength(vmec=vmec)
 modB_lb = target_volavgB*2/(1+mirror_target)
 modB_ub = target_volavgB*2*mirror_target/(1+mirror_target)
+# linear/nonlinear constraints
 tuples_nlc = [(fs.modB, modB_lb, modB_ub)]
 
 prob = ConstrainedProblem(tracer.energy_loss, tuples_nlc=tuples_nlc)
 
-# set up the BO solver
-def bo_solver(objective, x0, bounds, constraints, method, options):
-    """
-    Template class for the BO method. Must be of the form,
-    result = bo_solver(objective, x0, bounds, constraints,
-                 method, options) 
-    where result.x returns the optimal point.
-
-    objective: callable, function handle to the objective
-    x0: array, incumbent solution
-    bounds: list of tuples of lower and upper bounds, i.e. [(0.0, 1.0), ..., (-1.0, 4.0)]
-    constraints: list containing any scipy.NonlinearConstraint and scipy.LinearConstraint instances.
-    method: str.
-    options: dict, dictionary of options.
-    """
-    print('Executing the BO loop')
-    print(objective(x0))
-    for c in constraints:
-        print(c.fun(x0))
-
-    # result must have result.x attribute
-    result = type('Result', (), {})()
-    result.x = x0
-    return result
-
+solver = BoSolver(train_X,
+                train_Y,
+                max_iter=max_iter,
+                verbose=True,
+                num_restarts=num_restarts,
+                raw_samples=raw_samples
+                )   
 
 proc0_print("Running optimization")
 proc0_print("==================================================")
@@ -116,7 +128,10 @@ mirror = fs.mirror_ratio()
 proc0_print("Initial mirror ratio:", mirror)
 
 # solve the problem
-constrained_mpi_solve(prob, mpi, opt_handle=bo_solver)
+constrained_mpi_solve(prob, mpi, grad=False,
+                      opt_method = method,
+                      options = options,
+                      opt_handle=solver.solve)
 
 # evaluate the solution
 vmec.surf.x = prob.x

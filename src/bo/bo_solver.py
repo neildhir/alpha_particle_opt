@@ -3,6 +3,7 @@ import time
 from functools import partial
 import numpy as np
 from typing import Optional, List
+from numpy.typing import ArrayLike
 
 from botorch.acquisition import ExpectedImprovement
 from botorch.acquisition.analytic import LogExpectedImprovement
@@ -23,8 +24,8 @@ class BoSolver:
     """
 
     def __init__(self,
-                 train_X: Tensor,
-                 train_Y: Tensor,
+                 train_X: ArrayLike,
+                 train_Y: ArrayLike,
                  max_iter: int = 50,
                  verbose: bool = True,
                  SMOKE_TEST: bool = False,
@@ -36,9 +37,9 @@ class BoSolver:
 
         Parameters
         ----------
-        train_X : Tensor
+        train_X : Array
             Input features (training data, Fourier coefficients)
-        train_Y : Tensor
+        train_Y : Array
             Target (expected energy loss for this shape of the plasma boundary represented by the Fourier coefficients)
              shape (training data, 1)
         max_iter : int, optional
@@ -52,8 +53,8 @@ class BoSolver:
         raw_samples : int, optional
             The number of samples for initialization.
         """
-        self.train_X = train_X
-        self.train_Y = train_Y
+        self.train_X = from_numpy(train_X)
+        self.train_Y = from_numpy(train_Y)
         self.max_iter = max_iter
         self.verbose = verbose
         self.SMOKE_TEST = SMOKE_TEST
@@ -275,8 +276,8 @@ if __name__ == "__main__":
     bounds = [(0, 10), (0,10)]
     constraints = [NonlinearConstraint(lambda x: x.sum(), 0.0, np.inf)]
 
-    train_X = 10*from_numpy(np.random.uniform(size=(10,dim)))
-    train_Y = from_numpy(np.array([objective(x) for x in train_X])).reshape((-1,1))
+    train_X = 10*np.random.uniform(size=(10,dim))
+    train_Y = np.array([objective(x) for x in train_X]).reshape((-1,1))
 
     solver = BoSolver(train_X,
                  train_Y,
