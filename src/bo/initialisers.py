@@ -132,7 +132,8 @@ def gen_batch_initial_conditions_nonlinear(
             function optimization.
         raw_samples: The number of raw samples to consider in the initialization
             heuristic. Note: if `sample_around_best` is True (the default is False),
-            then `2 * raw_samples` samples are used.
+            then `2 * raw_samples` samples are used. raw_samples should be at least
+            as large as num_restarts.
         fixed_features: A map `{feature_index: value}` for features that
             should be fixed to a particular value during generation.
         options: Options for initial condition generation. For valid options see
@@ -215,7 +216,7 @@ def gen_batch_initial_conditions_nonlinear(
                 X_rnd = (
                     get_polytope_samples(
                         n=n * q,
-                        bounds=bounds,
+                        bounds=bounds.float(),
                         inequality_constraints=inequality_constraints,
                         equality_constraints=equality_constraints,
                         seed=seed,
@@ -243,7 +244,7 @@ def gen_batch_initial_conditions_nonlinear(
                         "as it appears hard to satisfy it."
                     )
 
-                print(f"Collected points:\n {all_points}")
+                # print(f"Collected points:\n {all_points}")
 
             X_rnd = all_points[:need, :].reshape(num_restarts, q, ndims)
 

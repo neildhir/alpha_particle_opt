@@ -4,11 +4,12 @@ from botorch.acquisition import ExpectedImprovement
 from botorch.models.transforms import Normalize, Standardize
 from botorch.optim import optimize_acqf
 from torch import Tensor
+from typing import Tuple, List
 
 
 def build_surrogate_model(
     train_X: Tensor, train_Y: Tensor, bounds: Tensor, state_dict=None
-) -> tuple[ExactMarginalLogLikelihood, SingleTaskGP]:
+) -> Tuple[ExactMarginalLogLikelihood, SingleTaskGP]:
     """
     Initialize the Krigeing model (Gaussian process regression) for the BO loop.
 
@@ -50,9 +51,9 @@ def optimize_acqf_and_get_new_point(
     ic_generator: callable,
     acq_func: ExpectedImprovement,
     bounds: Tensor,
-    constraint: list[tuple[callable, bool]],
+    constraint: List[Tuple[callable, bool]],
     SMOKE_TEST: bool,
-) -> tuple[Tensor, Tensor]:
+) -> Tuple[Tensor, Tensor]:
     """
     Optimizes the acquisition function and returns a new candidate and observation.
 
