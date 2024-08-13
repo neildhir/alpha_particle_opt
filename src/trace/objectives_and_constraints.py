@@ -11,6 +11,7 @@ from simsopt.field.tracing import (
 
 from src.utils.constants import ALPHA_PARTICLE_CHARGE, ALPHA_PARTICLE_MASS, FUSION_ALPHA_PARTICLE_ENERGY
 
+
 def prepare_config(vmec, max_mode, major_radius, aspect_target, target_volavgB):
     """
     Prepare the configuration for optimization.
@@ -290,7 +291,7 @@ class FastIonLoss(Optimizable):
         self.cache_results(confinement_times, is_success)
 
         return confinement_times, is_success
-    
+
     def energy_loss(self):
         """
         Compute the energy lost due to background electron collisions.
