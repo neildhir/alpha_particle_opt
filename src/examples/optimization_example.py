@@ -26,22 +26,22 @@ Run with e.g.
 """
 
 # initial configuration
-vmec_input = "../vmec_input_files/nfp4/ours/input.nfp4_QH_cold_high_res_phase_one_mirror_1.35_aspect_7.0_iota_0.89"
+vmec_input = "../vmec_input_files/nfp4/ours/input.nfp4_QH_cold_high_res"
 
 # optimization variables
-max_mode = 3
+max_mode = 1
 aspect_target = 7.0
 major_radius = 1.7 * aspect_target
-target_volavgB = 1.0
+target_volavgB = 0.1
 mirror_target = 1.35
-n_particles = 2
+n_particles = 30
 s_label = 0.25
-tmax= 1e-4
-tracing_tol= 1e-8
+tmax=1e-4
+tracing_tol=1e-8
 interpolant_degree=3
-interpolant_level=8
-bri_mpol= 8
-bri_ntor = 8
+interpolant_level=4
+bri_mpol=4
+bri_ntor=4
 
 proc0_print("setting up problem")
 proc0_print("==================================================")
@@ -59,7 +59,8 @@ nfp = vmec.wout.nfp
 # surf.set_upper_bound("rc(1,0)", 1.0)
 
 # boozer field
-booz = Booz(vmec, bri_mpol=bri_mpol, bri_ntor=bri_ntor)
+booz = Booz(vmec, interpolant_degree=interpolant_degree, interpolant_level=interpolant_level,
+          bri_mpol=bri_mpol, bri_ntor=bri_ntor)
 
 # initialize a particle sampler
 sampler = NonUniformSampler(mpi = mpi, nfp = nfp, s_label=s_label, n_particles=n_particles).sample_surface
@@ -79,6 +80,12 @@ modB_lb = target_volavgB*2/(1+mirror_target)
 modB_ub = target_volavgB*2*mirror_target/(1+mirror_target)
 tuples_nlc = [(fs.modB, modB_lb, modB_ub)]
 
+from simsopt.mhd import QuasisymmetryRatioResidual
+# Configure quasisymmetry objective:
+qs = QuasisymmetryRatioResidual(vmec,
+                                np.arange(0, 1.01, 0.1),  # Radii to target
+                                helicity_m=1, helicity_n=-1)  # (M, N) you want in |B|
+#prob = ConstrainedProblem(qs.total, tuples_nlc=tuples_nlc)
 prob = ConstrainedProblem(tracer.energy_loss, tuples_nlc=tuples_nlc)
 
 # set up the BO solver
@@ -97,9 +104,13 @@ def bo_solver(objective, x0, bounds, constraints, method, options):
     options: dict, dictionary of options.
     """
     print('Executing the BO loop')
-    print(objective(x0))
+    print('eval', 1, objective(x0+0.01))
+    print('eval', 2, objective(x0))
+    print('eval', 3, objective(x0))
+    print('eval', 4, constraints[0].fun(x0))
+    print('eval', 5, constraints[0].fun(x0+0.01))
     for c in constraints:
-        print(c.fun(x0))
+        print(4, c.fun(x0))
 
     # result must have result.x attribute
     result = type('Result', (), {})()
@@ -117,12 +128,13 @@ proc0_print("Initial mirror ratio:", mirror)
 
 # solve the problem
 constrained_mpi_solve(prob, mpi, opt_handle=bo_solver)
+print('done')
 
 # evaluate the solution
 vmec.surf.x = prob.x
 proc0_print("")
 proc0_print(f"Completed optimization with max_mode ={max_mode}. ")
 loss = tracer.energy_loss()
-proc0_print("Initial objective:", loss)
+proc0_print("Final objective:", loss)
 mirror = fs.mirror_ratio()
-proc0_print("Initial mirror ratio:", mirror)
+proc0_print("Final mirror ratio:", mirror)
