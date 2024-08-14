@@ -6,7 +6,7 @@ from botorch.acquisition import ExpectedImprovement
 import time
 from functools import partial
 
-from src.examples.tracing_example import StellaratorDesign
+from src.tracing_example import StellaratorDesign
 from src.bo.initialisers import gen_batch_initial_conditions_nonlinear
 from src.bo.bayes_opt import build_surrogate_model, optimize_acqf_and_get_new_point
 import os

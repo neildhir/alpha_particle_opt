@@ -31,23 +31,23 @@ Run with e.g.
 max_mode = 1
 aspect_target = 7.0
 major_radius = 1.7 * aspect_target
-target_volavgB = 0.1
-mirror_target = 1.35
-n_particles = 30
+target_volavgB = 1.0
+mirror_target = 2.35
+n_particles = 160
 s_label = 0.25
 tmax=1e-4
 tracing_tol=1e-8
 interpolant_degree=3
-interpolant_level=4
-bri_mpol=4
-bri_ntor=4
+interpolant_level=8
+bri_mpol=16
+bri_ntor=16
 
 # BO variables
-max_iter = 10
+max_iter = 50
 num_restarts = 2
-raw_samples = 32
-method = 'trust-constr'
-options={'maxiter':200}
+raw_samples = 16
+method = 'SLSQP'
+options={'maxiter':15, 'ftol':0.2}
 
 vmec_input_files = []
 directory = "../vmec_input_files/nfp4/ours"

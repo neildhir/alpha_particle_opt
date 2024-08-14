@@ -7,7 +7,7 @@ from numpy.typing import ArrayLike
 
 from botorch.acquisition import ExpectedImprovement
 from botorch.acquisition.analytic import LogExpectedImprovement
-from torch import Tensor, vstack, save, from_numpy
+from torch import Tensor, vstack, save, from_numpy, rand as torch_rand
 from botorch.fit import fit_gpytorch_mll
 from torch.autograd import grad as torch_grad
 from scipy.optimize import OptimizeResult, minimize as scipy_minimize
@@ -81,12 +81,19 @@ class BoSolver:
         X_cand: array, shape (num_restarts, dim_x)
             initial points for optimizer.
         """
-        # TODO: expose q as a parameter that we force to be 1, so that shaping everywhere is consistent
-        X_cand = gen_batch_initial_conditions_nonlinear(acq_func, q=1, num_restarts=self.num_restarts,            
-                                                raw_samples=self.raw_samples,
-                                                nonlinear_constraint=nonlinear_constraint,
-                                                bounds=bounds
-                                                ) # (num_restarts, q, dim_x)
+        ## TODO: expose q as a parameter that we force to be 1, so that shaping everywhere is consistent
+        #X_cand = gen_batch_initial_conditions_nonlinear(acq_func, q=1, num_restarts=self.num_restarts,            
+        #                                        raw_samples=self.raw_samples,
+        #                                        nonlinear_constraint=nonlinear_constraint,
+        #                                        bounds=bounds
+        #                                        ) # (num_restarts, q, dim_x)
+  
+        # TODO: use rejection sampling here
+        # uniformly sample the region
+        dim_x = bounds.shape[1]
+        unif = torch_rand((self.num_restarts, 1, dim_x)) # (num_restarts, q, dim_x)
+        X_cand =  (bounds[1] - bounds[0])*unif + bounds[0] # (num_restarts, q, dim_x)
+
         X_cand = X_cand.detach().numpy()
         X_cand = np.squeeze(X_cand, axis=1) # (num_restarts, dim_x)
         return X_cand
@@ -213,15 +220,30 @@ class BoSolver:
 
             t0 = time.monotonic()
 
+            if self.verbose:
+                print('Fitting model:')
+            tt0 = time.monotonic()
             # Fit model with new data: D =  D_old \cup D_new
             fit_gpytorch_mll(mll)
+            tt1 = time.monotonic()
+            if self.verbose:
+                print('--> time', tt1 - tt0)
 
             # Use best_f (expected energy loss) observed so far
             ei = LogExpectedImprovement(model, best_f=train_Y.min(), maximize=False)
 
+            if self.verbose:
+                print('Generating candidates:')
+            tt0 = time.monotonic()
             X_cand = self.sample_initial_points(ei, bounds=torch_bounds,
                                                     nonlinear_constraint=ic_nonlinear_inequality_constraints)
+            tt1 = time.monotonic()
+            if self.verbose:
+                print('--> time', tt1 - tt0)
 
+            if self.verbose:
+                print('Optimizing acq_func:')
+            tt0 = time.monotonic()
             new_x, new_f = self.optimize_acquisition(objective, 
                                                        X=X_cand, 
                                                        acq_func=ei, 
@@ -230,6 +252,9 @@ class BoSolver:
                                                        method=method, 
                                                        options=options,
                                                        )
+            tt1 = time.monotonic()
+            if self.verbose:
+                print('--> time', tt1 - tt0)
 
             train_X = vstack([train_X, new_x])
             train_Y = vstack([train_Y, new_f])
@@ -286,6 +311,5 @@ if __name__ == "__main__":
                  )   
 
     res = solver.solve(objective, x0, bounds, constraints, 
-                       method='trust-constr', 
-                       options={'maxiter':200})
+                       method='SLSQP', options={'maxiter':20, 'ftol':1e0})
     print(res)
