@@ -1,6 +1,5 @@
 import os
 import sys
-import glob
 
 sys.path.insert(0, os.getcwd())
 from mpi4py import MPI
@@ -8,7 +7,6 @@ import numpy as np
 from torch import Tensor, tensor, cat, stack, load, from_numpy
 from torch import min as torch_min
 from functools import cache
-from scipy.spatial import ConvexHull
 
 from src.trace.trace_boozer import TraceBoozer
 from src.utils.misc import clean_up_vmec_rubbish
