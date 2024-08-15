@@ -1,12 +1,15 @@
 import os
 import sys
+import glob
+from typing import List, Tuple, Callable, Union
 
 sys.path.insert(0, os.getcwd())
 from mpi4py import MPI
 import numpy as np
 from torch import Tensor, tensor, cat, stack, load, from_numpy
 from torch import min as torch_min
-from functools import cache
+from functools import lru_cache
+from scipy.spatial import ConvexHull
 
 from src.trace.trace_boozer import TraceBoozer
 from src.utils.misc import clean_up_vmec_rubbish
@@ -136,7 +139,7 @@ class StellaratorDesign:
 
         return res
 
-    @cache
+    @lru_cache
     def compute_B_field_vmec(self, x: np.ndarray, verbose: bool = False) -> np.ndarray:
         """
         Use VMEC to compute the |B| field.
@@ -195,7 +198,7 @@ class StellaratorDesign:
         """
         return from_numpy(self.B_upper_limit - self.compute_B_field_vmec(x))  # >= 0
 
-    def acqf_nonlinear_inequality_constraints(self) -> list[tuple[callable, bool]]:
+    def acqf_nonlinear_inequality_constraints(self) -> List[Tuple[Callable, bool]]:
         """
         This function returns the nonlinear (intra-point) inequality constraints for the acquisition function. Nonlinear inequality constraints: equation (13) and (14) of [1], section 4.2.
 
@@ -252,8 +255,8 @@ class StellaratorDesign:
         return stack([min_values.values, max_values.values])  # 2 x d
 
     def get_init_BO_params(
-        self, input_files: str | list[str]
-    ) -> tuple[Tensor, Tensor, Tensor, list[tuple[callable, bool]]]:
+        self, input_files: Union[str, List[str]]
+    ) -> Tuple[Tensor, Tensor, Tensor, List[Tuple[Callable, bool]]]:
         """
         Function builds the initial training data for Bayesian optimization as well as the bounds and constraints, given a list of input files or a single input file.
 
