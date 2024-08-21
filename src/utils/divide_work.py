@@ -9,10 +9,9 @@ def divide_work(n, k):
     k: int
     k: positive number
 
-    return start, end
-    intervals: 2D-array
-    intervals: contains all numbers assigned to each
-               worker k.
+    return intervals, counts
+    intervals: 2d list. Inner list i contains the list of indexes worker i should work on.
+    counts: 1d list, length k. Amount of work each worker must do.
     """
 
     # storage
